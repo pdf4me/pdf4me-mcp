@@ -24,7 +24,7 @@ async def _call_compress_api(
         "docContent": doc_content_base64,
         "docName": doc_name,
         "optimizeProfile": optimize_profile,
-        "async": False,
+        "isAsync": False,
     }
     api_base_url = config.pdf4me_base_url
     # api_base_url = "https://api-dev.pdf4me.com"
