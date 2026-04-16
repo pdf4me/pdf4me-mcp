@@ -16,6 +16,14 @@ _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 
+def _xlsx_filename_hint(doc_name: str) -> str:
+    if doc_name.lower().endswith(".pdf"):
+        return doc_name[:-4] + ".xlsx"
+    if doc_name.lower().endswith(".xlsx"):
+        return doc_name
+    return f"{doc_name}.xlsx"
+
+
 def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
     if data.startswith(b"\xef\xbb\xbf"):
         data = data[3:]
@@ -23,9 +31,10 @@ def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
 
 
 def _docdata_b64_from_json(obj: Any, *, depth: int = 0) -> Optional[str]:
+    """Read base64 from Document.DocData / document.docData (ASP.NET contract)."""
     if depth > 12 or not isinstance(obj, dict):
         return None
-    for dk in ("docContent", "DocContent", "docData", "DocData"):
+    for dk in ("docData", "DocData"):
         v = obj.get(dk)
         if isinstance(v, str) and v:
             return v
@@ -38,15 +47,16 @@ def _docdata_b64_from_json(obj: Any, *, depth: int = 0) -> Optional[str]:
     return None
 
 
-def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
+def _bytes_from_xlsx_response(resp: httpx.Response) -> bytes:
+    """Binary XLSX from Content-Type or body; otherwise JSON with Document.DocData base64."""
     ct = (resp.headers.get("content-type") or "").lower()
     raw = resp.content
 
-    if "application/pdf" in ct or "application/octet-stream" in ct:
+    if "spreadsheetml" in ct or "application/octet-stream" in ct:
         return raw
 
     body = _strip_utf8_bom_and_leading_ws(raw)
-    if body.startswith(b"%PDF"):
+    if body.startswith(b"PK"):
         return body
 
     trimmed = _strip_utf8_bom_and_leading_ws(raw)
@@ -56,38 +66,50 @@ def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError(f"Invalid JSON in response: {exc}") from exc
         if not isinstance(payload, dict):
-            raise ValueError("Expected JSON object with docContent")
+            raise ValueError("Expected JSON object with Document.DocData")
         b64 = _docdata_b64_from_json(payload)
         if not b64:
-            raise ValueError("Response JSON has no docContent/DocData base64 field")
+            raise ValueError("Response JSON has no Document.DocData / docData base64 field")
         return base64.b64decode(b64)
 
-    if raw:
-        return raw
-
     raise ValueError(
-        f"Expected PDF binary or JSON with docContent, got content-type {ct!r}"
+        f"Expected Excel binary or JSON with DocData, got content-type {ct!r}"
     )
 
 
-async def _call_compress_api(
+async def _call_convert_pdf_to_excel_api(
     doc_content_base64: str,
     doc_name: str,
-    optimize_profile: str,
     PDF4ME_API_KEY: str,
     *,
+    quality_type: str,
+    merge_all_sheets: bool,
+    language: str,
+    ocr_when_needed: bool,
     use_async: bool,
 ) -> bytes:
-    api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/Optimize"
+    """POST ConvertPdfToExcel; return raw XLSX bytes (200 or 202 + poll)."""
     payload = {
         "docContent": doc_content_base64,
         "docName": doc_name,
-        "optimizeProfile": optimize_profile,
-        "isAsync": False,
+        "qualityType": quality_type,
+        "mergeAllSheets": merge_all_sheets,
+        "language": language,
+        "outputFormat": "Xlsx",
+        "ocrWhenNeeded": "true" if ocr_when_needed else "false",
+        "isAsync": use_async,
+    }
+    api_base_url = config.pdf4me_base_url.rstrip("/")
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {PDF4ME_API_KEY}",
     }
     async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=payload, headers=headers)
+        resp = await client.post(
+            f"{api_base_url}/api/v2/ConvertPdfToExcel",
+            json=payload,
+            headers=headers,
+        )
         if resp.status_code == 202:
             location = resp.headers.get("Location")
             if not location:
@@ -95,7 +117,7 @@ async def _call_compress_api(
                     "API returned 202 Accepted but no Location header for polling"
                 )
             poll_url = resolve_polling_url(api_base_url, location)
-            return await _poll_compress_job(
+            return await _poll_convert_pdf_to_excel_job(
                 client,
                 poll_url,
                 headers,
@@ -103,10 +125,10 @@ async def _call_compress_api(
                 interval_sec=_ASYNC_POLL_INTERVAL_SEC,
             )
         resp.raise_for_status()
-        return _bytes_from_pdf_response(resp)
+        return _bytes_from_xlsx_response(resp)
 
 
-async def _poll_compress_job(
+async def _poll_convert_pdf_to_excel_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
@@ -119,31 +141,48 @@ async def _poll_compress_job(
             await asyncio.sleep(interval_sec)
         poll = await client.get(location_url, headers=headers)
         if poll.status_code == 200:
-            return _bytes_from_pdf_response(poll)
+            return _bytes_from_xlsx_response(poll)
         if poll.status_code == 202:
             continue
         poll.raise_for_status()
     raise TimeoutError(
-        f"Optimize did not finish after {max_attempts} polls ({interval_sec}s apart)"
+        f"PDF to Excel did not finish after {max_attempts} polls ({interval_sec}s apart)"
     )
 
 
 @tool(
-    name="compress_pdf",
+    name="convert_pdf_to_excel",
     description=(
-        "Compress a PDF file using the PDF4me API to reduce file size. "
-        "Provide the local file path to the PDF. "
-        "Choose an optimization profile: Web (fast download), Print (high-quality), or Screen (screen viewing). "
-        "Optionally specify an output directory and output file name."
+        "Convert a local PDF file to Excel (XLSX) using the PDF4me ConvertPdfToExcel API. "
+        "Provide the file path to the PDF. "
+        "Options: quality (Draft/High), merge_all_sheets, language, OCR when needed, use_async, and optional output path. "
+        "When use_async is true, the API may return 202 and the tool polls until the XLSX is ready. "
+        "Output is always XLSX."
     ),
 )
-async def compress_pdf_http(
+async def convert_pdf_to_excel_http(
     file_path: str,
-    optimize_profile: Literal["Web", "Print", "Screen"] = "Web",
+    quality_type: Literal["Draft", "High"] = "Draft",
+    merge_all_sheets: bool = True,
+    language: str = "English",
+    ocr_when_needed: bool = True,
     use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
+    """Convert PDF to Excel via PDF4me ConvertPdfToExcel.
+
+    Args:
+        file_path: Local path to the PDF file to convert.
+        quality_type: Draft or High quality for extraction.
+        merge_all_sheets: Merge content into a single sheet when supported.
+        language: Document language hint for OCR/extraction.
+        ocr_when_needed: Enable OCR when the API determines it is needed.
+        use_async: When True, request async processing and poll the Location URL on 202
+            using fixed internal retry settings (not configurable by the caller).
+        output_dir: Directory to save the XLSX. Defaults to the same directory as the input file.
+        output_file_name: Name for the output file. Defaults from the PDF name (e.g. doc.pdf → doc.xlsx).
+    """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
         return ToolResult(content=f"Input file must be a PDF, got '{extension}' instead.")
@@ -151,7 +190,9 @@ async def compress_pdf_http(
     doc_name = os.path.basename(file_path)
     resolved_output_dir = output_dir if output_dir else os.path.dirname(
         os.path.abspath(file_path))
-    resolved_output_name = output_file_name if output_file_name else f"compressed_{doc_name}"
+    resolved_output_name = (
+        output_file_name if output_file_name else _xlsx_filename_hint(doc_name)
+    )
 
     PDF4ME_API_KEY = config.api_key
     if not PDF4ME_API_KEY:
@@ -160,8 +201,14 @@ async def compress_pdf_http(
         )
 
     try:
-        pdf_bytes = await _call_compress_api(
-            doc_content_base64, doc_name, optimize_profile, PDF4ME_API_KEY,
+        xlsx_bytes = await _call_convert_pdf_to_excel_api(
+            doc_content_base64,
+            doc_name,
+            PDF4ME_API_KEY,
+            quality_type=quality_type,
+            merge_all_sheets=merge_all_sheets,
+            language=language,
+            ocr_when_needed=ocr_when_needed,
             use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
@@ -177,21 +224,19 @@ async def compress_pdf_http(
     except (ValueError, TimeoutError) as exc:
         return ToolResult(content=str(exc))
 
-    if not pdf_bytes:
+    if not xlsx_bytes or not xlsx_bytes.startswith(b"PK") or len(xlsx_bytes) < 100:
         return ToolResult(
-            content="Unexpected API response — no document content returned."
+            content="Unexpected API response — Excel file missing or invalid."
         )
 
+    output_path = os.path.join(resolved_output_dir, resolved_output_name)
     try:
-        output_path = write_file_from_bytes(
-            pdf_bytes, resolved_output_dir, resolved_output_name
-        )
+        write_file_from_bytes(
+            xlsx_bytes, resolved_output_dir, resolved_output_name)
     except OSError as exc:
-        return ToolResult(
-            content=f"Failed to write output file in '{resolved_output_dir}': {exc}"
-        )
+        return ToolResult(content=f"Failed to write output file '{output_path}': {exc}")
 
     return ToolResult(
-        content=f"PDF compressed successfully. Saved to {output_path}",
+        content=f"PDF converted to Excel successfully. Saved to {output_path}",
         structured_content={"output_path": output_path},
     )
