@@ -1,5 +1,6 @@
 import base64
 import os
+from urllib.parse import urljoin
 
 
 def file_to_base64(file_path: str) -> tuple[str, str]:
@@ -35,3 +36,14 @@ def write_file_from_bytes(data: bytes, directory_path: str, file_name: str) -> N
     output_path = _unique_path(directory_path, file_name)
     with open(output_path, "wb") as f:
         f.write(data)
+
+
+def resolve_polling_url(api_base_url: str, location: str) -> str:
+    """Resolve polling Location header to an absolute URL."""
+    if not location:
+        return location
+
+    value = location.strip()
+    if value.startswith(("http://", "https://")):
+        return value
+    return urljoin(api_base_url.rstrip("/") + "/", value.lstrip("/"))
