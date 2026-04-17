@@ -31,7 +31,7 @@ def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
 
 
 def _docdata_b64_from_json(obj: Any, *, depth: int = 0) -> Optional[str]:
-    """Read base64 from Document.DocData / document.docData (ASP.NET contract)."""
+    """Read base64 from Document.DocData / document.docData ."""
     if depth > 12 or not isinstance(obj, dict):
         return None
     for dk in ("docData", "DocData"):

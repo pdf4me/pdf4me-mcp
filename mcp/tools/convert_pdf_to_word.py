@@ -2,7 +2,7 @@ import asyncio
 import base64
 import json
 import os
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import httpx
 
@@ -16,12 +16,12 @@ _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 
-def _xlsx_output_filename(doc_name: str) -> str:
-    if doc_name.lower().endswith(".xlsx"):
+def _docx_filename_hint(doc_name: str) -> str:
+    if doc_name.lower().endswith(".pdf"):
+        return doc_name[:-4] + ".docx"
+    if doc_name.lower().endswith(".docx"):
         return doc_name
-    if doc_name.lower().endswith(".json"):
-        return doc_name[:-5] + ".xlsx"
-    return f"{doc_name}.xlsx"
+    return f"{doc_name}.docx"
 
 
 def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
@@ -47,12 +47,12 @@ def _docdata_b64_from_json(obj: Any, *, depth: int = 0) -> Optional[str]:
     return None
 
 
-def _bytes_from_xlsx_response(resp: httpx.Response) -> bytes:
-    """Binary XLSX from Content-Type or body; otherwise JSON with Document.DocData base64."""
+def _bytes_from_docx_response(resp: httpx.Response) -> bytes:
+    """Binary DOCX from Content-Type or body; otherwise JSON with Document.DocData base64."""
     ct = (resp.headers.get("content-type") or "").lower()
     raw = resp.content
 
-    if "spreadsheetml" in ct or "application/octet-stream" in ct:
+    if "wordprocessingml" in ct or "application/octet-stream" in ct:
         return raw
 
     body = _strip_utf8_bom_and_leading_ws(raw)
@@ -73,40 +73,31 @@ def _bytes_from_xlsx_response(resp: httpx.Response) -> bytes:
         return base64.b64decode(b64)
 
     raise ValueError(
-        f"Expected Excel binary or JSON with DocData, got content-type {ct!r}"
+        f"Expected Word binary or JSON with DocData, got content-type {ct!r}"
     )
 
 
-async def _call_convert_json_to_excel_api(
+async def _call_convert_pdf_to_word_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
     *,
-    worksheet_name: str,
-    is_title_wrap_text: bool,
-    is_title_bold: bool,
-    convert_number_and_date: bool,
-    number_format: str,
-    date_format: str,
-    ignore_null_values: bool,
-    first_row: int,
-    first_column: int,
+    quality_type: str,
+    language: str,
+    merge_all_sheets: bool,
+    ocr_when_needed: bool,
     use_async: bool,
 ) -> bytes:
-    """POST ConvertJsonToExcel; return raw XLSX bytes (200 or 202 + poll)."""
+    """POST ConvertPdfToWord; return raw DOCX bytes (200 or 202 + poll)."""
     payload = {
         "docContent": doc_content_base64,
         "docName": doc_name,
-        "worksheetName": worksheet_name,
-        "isTitleWrapText": is_title_wrap_text,
-        "isTitleBold": is_title_bold,
-        "convertNumberAndDate": convert_number_and_date,
-        "numberFormat": number_format,
-        "dateFormat": date_format,
-        "ignoreNullValues": ignore_null_values,
-        "firstRow": first_row,
-        "firstColumn": first_column,
-        "isAsync": use_async,
+        "qualityType": quality_type,
+        "language": language,
+        "mergeAllSheets": merge_all_sheets,
+        "outputFormat": "Docx",
+        "ocrWhenNeeded": "true" if ocr_when_needed else "false",
+        "async": use_async,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -115,7 +106,7 @@ async def _call_convert_json_to_excel_api(
     }
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
-            f"{api_base_url}/api/v2/ConvertJsonToExcel",
+            f"{api_base_url}/api/v2/ConvertPdfToWord",
             json=payload,
             headers=headers,
         )
@@ -126,7 +117,7 @@ async def _call_convert_json_to_excel_api(
                     "API returned 202 Accepted but no Location header for polling"
                 )
             poll_url = resolve_polling_url(api_base_url, location)
-            return await _poll_convert_json_to_excel_job(
+            return await _poll_convert_pdf_to_word_job(
                 client,
                 poll_url,
                 headers,
@@ -134,10 +125,10 @@ async def _call_convert_json_to_excel_api(
                 interval_sec=_ASYNC_POLL_INTERVAL_SEC,
             )
         resp.raise_for_status()
-        return _bytes_from_xlsx_response(resp)
+        return _bytes_from_docx_response(resp)
 
 
-async def _poll_convert_json_to_excel_job(
+async def _poll_convert_pdf_to_word_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
@@ -150,73 +141,57 @@ async def _poll_convert_json_to_excel_job(
             await asyncio.sleep(interval_sec)
         poll = await client.get(location_url, headers=headers)
         if poll.status_code == 200:
-            return _bytes_from_xlsx_response(poll)
+            return _bytes_from_docx_response(poll)
         if poll.status_code == 202:
             continue
         poll.raise_for_status()
     raise TimeoutError(
-        f"JSON to Excel did not finish after {max_attempts} polls ({interval_sec}s apart)"
+        f"PDF to Word did not finish after {max_attempts} polls ({interval_sec}s apart)"
     )
 
 
 @tool(
-    name="convert_json_to_excel",
+    name="convert_pdf_to_word",
     description=(
-        "Convert a local JSON file to Excel (XLSX) using the PDF4me ConvertJsonToExcel API. "
-        "Provide the file path to UTF-8 JSON. "
-        "Options: worksheet_name, title formatting, number/date conversion and formats, "
-        "ignore_null_values, first_row/first_column (1-based), use_async, and optional output path. "
-        "When use_async is true, the API may return 202 and the tool polls until the XLSX is ready."
+        "Convert a local PDF file to Word (DOCX) using the PDF4me ConvertPdfToWord API. "
+        "Provide the file path to the PDF. "
+        "Options: quality (Draft/High), merge_all_sheets, language, OCR when needed, use_async, and optional output path. "
+        "When use_async is true, the API may return 202 and the tool polls until the DOCX is ready. "
+        "Output is always DOCX."
     ),
 )
-async def convert_json_to_excel_http(
+async def convert_pdf_to_word_http(
     file_path: str,
-    worksheet_name: str = "Sheet1",
-    is_title_wrap_text: bool = True,
-    is_title_bold: bool = True,
-    convert_number_and_date: bool = False,
-    number_format: str = "11",
-    date_format: str = "01/01/2025",
-    ignore_null_values: bool = False,
-    first_row: int = 1,
-    first_column: int = 1,
+    quality_type: Literal["Draft", "High"] = "Draft",
+    language: str = "English",
+    merge_all_sheets: bool = True,
+    ocr_when_needed: bool = True,
     use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
-    """Convert JSON to Excel via PDF4me ConvertJsonToExcel.
+    """Convert PDF to Word via PDF4me ConvertPdfToWord.
 
     Args:
-        file_path: Local path to the JSON file (.json).
-        worksheet_name: Target worksheet name.
-        is_title_wrap_text: Wrap text in title row when supported.
-        is_title_bold: Bold title row when supported.
-        convert_number_and_date: Enable number/date cell conversion.
-        number_format: Number format string for the API.
-        date_format: Date format string for the API.
-        ignore_null_values: Skip null values when building the sheet.
-        first_row: First data row (1-based).
-        first_column: First data column (1-based).
+        file_path: Local path to the PDF file to convert.
+        quality_type: Draft or High quality for extraction.
+        language: Document language hint for OCR/extraction.
+        merge_all_sheets: Merge content into a single output when supported.
+        ocr_when_needed: Enable OCR when the API determines it is needed.
         use_async: When True, request async processing and poll the Location URL on 202
             using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the XLSX. Defaults to the same directory as the input file.
-        output_file_name: Name for the output file. Defaults from the input name (e.g. data.json → data.xlsx).
+        output_dir: Directory to save the DOCX. Defaults to the same directory as the input file.
+        output_file_name: Name for the output file. Defaults from the PDF name (e.g. doc.pdf -> doc.docx).
     """
     doc_content_base64, extension = file_to_base64(file_path)
-    if extension.lower() != ".json":
-        return ToolResult(
-            content=f"Input file must be JSON (.json), got '{extension}' instead."
-        )
+    if extension.lower() != ".pdf":
+        return ToolResult(content=f"Input file must be a PDF, got '{extension}' instead.")
 
-    basename = os.path.basename(file_path)
-    doc_name, _ = os.path.splitext(basename)
-    if not doc_name:
-        doc_name = "output"
-
+    doc_name = os.path.basename(file_path)
     resolved_output_dir = output_dir if output_dir else os.path.dirname(
         os.path.abspath(file_path))
     resolved_output_name = (
-        output_file_name if output_file_name else _xlsx_output_filename(doc_name)
+        output_file_name if output_file_name else _docx_filename_hint(doc_name)
     )
 
     PDF4ME_API_KEY = config.api_key
@@ -226,19 +201,14 @@ async def convert_json_to_excel_http(
         )
 
     try:
-        xlsx_bytes = await _call_convert_json_to_excel_api(
+        docx_bytes = await _call_convert_pdf_to_word_api(
             doc_content_base64,
             doc_name,
             PDF4ME_API_KEY,
-            worksheet_name=worksheet_name,
-            is_title_wrap_text=is_title_wrap_text,
-            is_title_bold=is_title_bold,
-            convert_number_and_date=convert_number_and_date,
-            number_format=number_format,
-            date_format=date_format,
-            ignore_null_values=ignore_null_values,
-            first_row=first_row,
-            first_column=first_column,
+            quality_type=quality_type,
+            language=language,
+            merge_all_sheets=merge_all_sheets,
+            ocr_when_needed=ocr_when_needed,
             use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
@@ -254,19 +224,19 @@ async def convert_json_to_excel_http(
     except (ValueError, TimeoutError) as exc:
         return ToolResult(content=str(exc))
 
-    if not xlsx_bytes or not xlsx_bytes.startswith(b"PK") or len(xlsx_bytes) < 100:
+    if not docx_bytes or not docx_bytes.startswith(b"PK") or len(docx_bytes) < 100:
         return ToolResult(
-            content="Unexpected API response — Excel file missing or invalid."
+            content="Unexpected API response — Word document missing or invalid."
         )
 
     output_path = os.path.join(resolved_output_dir, resolved_output_name)
     try:
         write_file_from_bytes(
-            xlsx_bytes, resolved_output_dir, resolved_output_name)
+            docx_bytes, resolved_output_dir, resolved_output_name)
     except OSError as exc:
         return ToolResult(content=f"Failed to write output file '{output_path}': {exc}")
 
     return ToolResult(
-        content=f"JSON converted to Excel successfully. Saved to {output_path}",
+        content=f"PDF converted to Word successfully. Saved to {output_path}",
         structured_content={"output_path": output_path},
     )
