@@ -64,74 +64,7 @@ def _bytes_from_image_response(resp: httpx.Response) -> bytes:
     )
 
 
-def _build_payload(
-    doc_name: str,
-    doc_content_b64: str,
-    watermark_file_name: str,
-    watermark_file_b64: str,
-    position: str,
-    opacity: Optional[float],
-    horizontal_offset: Optional[int],
-    vertical_offset: Optional[int],
-    position_x: Optional[float],
-    position_y: Optional[float],
-    rotation: Optional[float],
-    use_async: bool,
-) -> dict:
-    payload: dict = {
-        "docName": doc_name,
-        "docContent": doc_content_b64,
-        "WatermarkFileName": watermark_file_name,
-        "WatermarkFileContent": watermark_file_b64,
-        "Position": position,
-        "isAsync": True,
-    }
-    if opacity is not None:
-        payload["Opacity"] = opacity
-    if horizontal_offset is not None:
-        payload["HorizontalOffset"] = horizontal_offset
-    if vertical_offset is not None:
-        payload["VerticalOffset"] = vertical_offset
-    if position_x is not None:
-        payload["PositionX"] = position_x
-    if position_y is not None:
-        payload["PositionY"] = position_y
-    if rotation is not None:
-        payload["Rotation"] = rotation
-    return payload
-
-
-async def _call_add_image_watermark_api(
-    payload: dict,
-    PDF4ME_API_KEY: str,
-) -> bytes:
-    api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/AddImageWatermarkToImage"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Basic {PDF4ME_API_KEY}",
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        if resp.status_code == 202:
-            location = resp.headers.get("Location")
-            if not location:
-                raise ValueError(
-                    "API returned 202 Accepted but no Location header for polling"
-                )
-            poll_url = resolve_polling_url(api_base_url, location)
-            return await _poll_add_image_watermark_job(
-                client,
-                poll_url,
-                headers,
-                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
-                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
-            )
-        resp.raise_for_status()
-        return _bytes_from_image_response(resp)
-
-
-async def _poll_add_image_watermark_job(
+async def _poll_add_text_watermark_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
@@ -149,11 +82,42 @@ async def _poll_add_image_watermark_job(
             continue
         poll.raise_for_status()
     raise TimeoutError(
-        f"AddImageWatermarkToImage did not finish after {max_attempts} polls ({interval_sec}s apart)"
+        f"AddTextWatermarkToImage did not finish after {max_attempts} polls "
+        f"({interval_sec}s apart)"
     )
 
 
-PositionOption = Literal[
+async def _call_add_text_watermark_api(
+    payload: dict[str, Any],
+    PDF4ME_API_KEY: str,
+) -> bytes:
+    api_base_url = config.pdf4me_base_url.rstrip("/")
+    url = f"{api_base_url}/api/v2/AddTextWatermarkToImage"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {PDF4ME_API_KEY}",
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        if resp.status_code == 202:
+            location = resp.headers.get("Location")
+            if not location:
+                raise ValueError(
+                    "API returned 202 Accepted but no Location header for polling"
+                )
+            poll_url = resolve_polling_url(api_base_url, location)
+            return await _poll_add_text_watermark_job(
+                client,
+                poll_url,
+                headers,
+                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
+                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
+            )
+        resp.raise_for_status()
+        return _bytes_from_image_response(resp)
+
+
+TextPositionOption = Literal[
     "topright",
     "topleft",
     "bottomright",
@@ -166,27 +130,28 @@ PositionOption = Literal[
 
 
 @tool(
-    name="add_image_watermark_to_image",
+    name="add_text_watermark_to_image",
     description=(
-        "Overlay a watermark image on a source image via PDF4me AddImageWatermarkToImage (/api/v2/AddImageWatermarkToImage). "
-        "Provide image_file_path, watermark_image_file_path, and position "
-        "(topright, topleft, bottomright, bottomleft, centralhorizontal, diagonal, centralvertical, custom). "
-        "Optional: opacity (0.0–1.0), horizontal/vertical offset, position_x/y for custom, rotation (degrees), output path."
+        "Add a text watermark to an image via PDF4me AddTextWatermarkToImage (/api/v2/AddTextWatermarkToImage). "
+        "image_file_path, watermark_text, text_position (e.g. bottomleft, diagonal, custom), "
+        "text_font_family, is_underline, is_italic; optional font size, colour, bold, opacity, rotation, position_x/y."
     ),
 )
-async def add_image_watermark_to_image(
+async def add_text_watermark_to_image(
     image_file_path: str,
-    watermark_image_file_path: str,
-    position: PositionOption,
-    use_async: bool = True,
+    watermark_text: str,
+    text_position: TextPositionOption,
+    text_font_family: str = "Arial",
+    is_underline: bool = False,
+    is_italic: bool = False,
+    text_font_size: int = 30,
+    text_colour: str = "#000000",
+    is_bold: bool = False,
+    opacity: float = 1.0,
+    rotation_angle: float = 0.0,
+    position_x: float = 0.0,
+    position_y: float = 0.0,
     doc_name: Optional[str] = None,
-    watermark_file_name: Optional[str] = None,
-    opacity: Optional[float] = None,
-    horizontal_offset: Optional[int] = None,
-    vertical_offset: Optional[int] = None,
-    position_x: Optional[float] = None,
-    position_y: Optional[float] = None,
-    rotation: Optional[float] = None,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
@@ -197,43 +162,41 @@ async def add_image_watermark_to_image(
         )
 
     try:
-        src_b64, _ = file_to_base64(image_file_path)
+        img_b64, _ = file_to_base64(image_file_path)
     except OSError as exc:
         return ToolResult(content=f"Could not read source image: {exc}")
 
-    try:
-        wm_b64, _ = file_to_base64(watermark_image_file_path)
-    except OSError as exc:
-        return ToolResult(content=f"Could not read watermark image: {exc}")
-
     resolved_doc_name = doc_name or os.path.basename(image_file_path)
-    resolved_wm_name = watermark_file_name or os.path.basename(watermark_image_file_path)
 
-    payload = _build_payload(
-        doc_name=resolved_doc_name,
-        doc_content_b64=src_b64,
-        watermark_file_name=resolved_wm_name,
-        watermark_file_b64=wm_b64,
-        position=position,
-        opacity=opacity,
-        horizontal_offset=horizontal_offset,
-        vertical_offset=vertical_offset,
-        position_x=position_x,
-        position_y=position_y,
-        rotation=rotation,
-        use_async=use_async,
-    )
+    payload: dict[str, Any] = {
+        "docName": resolved_doc_name,
+        "docContent": img_b64,
+        "WatermarkText": watermark_text,
+        "TextPosition": text_position,
+        "TextFontFamily": text_font_family,
+        "TextFontSize": text_font_size,
+        "TextColour": text_colour,
+        "IsBold": is_bold,
+        "IsUnderline": is_underline,
+        "IsItalic": is_italic,
+        "Opacity": opacity,
+        "RotationAngle": rotation_angle,
+        "PositionX": position_x,
+        "PositionY": position_y,
+        "isAsync": True,
+    }
 
     resolved_output_dir = (
         output_dir if output_dir else os.path.dirname(os.path.abspath(image_file_path))
     )
     resolved_output_name = (
-        output_file_name if output_file_name
-        else f"watermarked_{os.path.basename(image_file_path)}"
+        output_file_name
+        if output_file_name
+        else f"text_watermarked_{os.path.basename(image_file_path)}"
     )
 
     try:
-        image_bytes = await _call_add_image_watermark_api(payload, PDF4ME_API_KEY)
+        image_bytes = await _call_add_text_watermark_api(payload, PDF4ME_API_KEY)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:
             return ToolResult(
@@ -260,9 +223,10 @@ async def add_image_watermark_to_image(
         )
 
     return ToolResult(
-        content=f"Watermarked image saved successfully to {output_path}",
+        content=f"Text-watermarked image saved successfully to {output_path}",
         structured_content={
             "output_path": output_path,
-            "position": position,
+            "text_position": text_position,
+            "watermark_text": watermark_text,
         },
     )

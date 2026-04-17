@@ -60,7 +60,7 @@ async def _call_convert_url_to_pdf_api(
         "bottomMargin": bottom_margin,
         "printBackground": print_background,
         "displayHeaderFooter": display_header_footer,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {

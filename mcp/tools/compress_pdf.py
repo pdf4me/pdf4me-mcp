@@ -84,7 +84,7 @@ async def _call_compress_api(
         "docContent": doc_content_base64,
         "docName": doc_name,
         "optimizeProfile": optimize_profile,
-        "isAsync": False,
+        "isAsync": True,
     }
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(url, json=payload, headers=headers)

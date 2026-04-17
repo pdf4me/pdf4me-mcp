@@ -174,7 +174,7 @@ async def add_form_fields_to_pdf(
         "Size": size,
         "pages": pages,
         "formFieldType": form_field_type,
-        "isAsync": use_async,
+        "isAsync": True,
     }
 
     resolved_output_dir = (

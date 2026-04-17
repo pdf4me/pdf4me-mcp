@@ -84,7 +84,7 @@ async def _call_add_attachment_to_pdf_api(
         "docName": doc_name,
         "docContent": doc_content_base64,
         "attachments": attachments,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     headers = {
         "Content-Type": "application/json",

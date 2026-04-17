@@ -2,15 +2,15 @@ import asyncio
 import base64
 import json
 import os
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import httpx
 
-from fastmcp.tools.function_tool import tool
 from fastmcp.tools import ToolResult
+from fastmcp.tools.function_tool import tool
 
 from config import config
-from helper import resolve_polling_url, write_file_from_bytes
+from helper import file_to_base64, resolve_polling_url, write_file_from_bytes
 
 _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
@@ -38,12 +38,22 @@ def _docdata_b64_from_json(obj: Any, *, depth: int = 0) -> Optional[str]:
     return None
 
 
-def _bytes_from_image_response(resp: httpx.Response) -> bytes:
+def _output_file_name_from_json(payload: dict[str, Any]) -> Optional[str]:
+    for key in ("File Name", "fileName", "docName", "DocName"):
+        v = payload.get(key)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
+
+
+def _bytes_and_name_from_compress_image_response(
+    resp: httpx.Response,
+) -> tuple[bytes, Optional[str]]:
     ct = (resp.headers.get("content-type") or "").lower()
     raw = resp.content
 
     if any(t in ct for t in ("image/", "application/octet-stream")):
-        return raw
+        return raw, None
 
     trimmed = _strip_utf8_bom_and_leading_ws(raw)
     if trimmed.startswith((b"{", b"[")):
@@ -54,37 +64,49 @@ def _bytes_from_image_response(resp: httpx.Response) -> bytes:
         if isinstance(payload, dict):
             b64 = _docdata_b64_from_json(payload)
             if b64:
-                return base64.b64decode(b64)
+                return base64.b64decode(b64), _output_file_name_from_json(payload)
 
     if raw:
-        return raw
+        return raw, None
 
     raise ValueError(
         f"Expected image binary or JSON with base64, got content-type {ct!r}"
     )
 
 
-async def _call_create_barcode_api(
-    text: str,
-    barcode_type: str,
-    hide_text: bool,
-    PDF4ME_API_KEY: str,
+async def _poll_compress_image_job(
+    client: httpx.AsyncClient,
+    location_url: str,
+    headers: dict[str, str],
     *,
-    use_async: bool,
-) -> bytes:
+    max_attempts: int,
+    interval_sec: float,
+) -> httpx.Response:
+    for attempt in range(max_attempts):
+        if attempt > 0:
+            await asyncio.sleep(interval_sec)
+        poll = await client.get(location_url, headers=headers)
+        if poll.status_code == 200:
+            return poll
+        if poll.status_code == 202:
+            continue
+        poll.raise_for_status()
+    raise TimeoutError(
+        f"CompressImage did not finish after {max_attempts} polls ({interval_sec}s apart)"
+    )
+
+
+async def _call_compress_image_api(
+    payload: dict[str, Any],
+    pdf4me_api_key: str,
+) -> tuple[bytes, Optional[str]]:
     api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/CreateBarcode"
-    payload = {
-        "text": text,
-        "barcodeType": barcode_type,
-        "hideText": hide_text,
-        "isAsync": True,
-    }
+    url = f"{api_base_url}/api/v2/CompressImage"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Basic {PDF4ME_API_KEY}",
+        "Authorization": f"Basic {pdf4me_api_key}",
     }
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(url, json=payload, headers=headers)
         if resp.status_code == 202:
             location = resp.headers.get("Location")
@@ -93,72 +115,66 @@ async def _call_create_barcode_api(
                     "API returned 202 Accepted but no Location header for polling"
                 )
             poll_url = resolve_polling_url(api_base_url, location)
-            return await _poll_create_barcode_job(
+            final = await _poll_compress_image_job(
                 client,
                 poll_url,
                 headers,
                 max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
                 interval_sec=_ASYNC_POLL_INTERVAL_SEC,
             )
+            return _bytes_and_name_from_compress_image_response(final)
         resp.raise_for_status()
-        return _bytes_from_image_response(resp)
+        return _bytes_and_name_from_compress_image_response(resp)
 
 
-async def _poll_create_barcode_job(
-    client: httpx.AsyncClient,
-    location_url: str,
-    headers: dict[str, str],
-    *,
-    max_attempts: int,
-    interval_sec: float,
-) -> bytes:
-    for attempt in range(max_attempts):
-        if attempt > 0:
-            await asyncio.sleep(interval_sec)
-        poll = await client.get(location_url, headers=headers)
-        if poll.status_code == 200:
-            return _bytes_from_image_response(poll)
-        if poll.status_code == 202:
-            continue
-        poll.raise_for_status()
-    raise TimeoutError(
-        f"CreateBarcode did not finish after {max_attempts} polls ({interval_sec}s apart)"
-    )
+ImageTypeOption = Literal["JPG", "PNG", "WebP"]
+CompressionLevelOption = Literal["Max", "Medium", "Low"]
 
 
 @tool(
-    name="create_barcode",
+    name="compress_image",
     description=(
-        "Create a standalone barcode or QR code image (PNG) using the PDF4me Create Barcode API. "
-        "Pass the text to encode and barcodeType (e.g. qrCode, code128, dataMatrix, ean13, upcA). "
-        "hideText hides the human-readable label. Saves the file and returns the path."
+        "Compress an image via PDF4me CompressImage (/api/v2/CompressImage). "
+        "image_file_path, image_type (JPG, PNG, WebP), compression_level (Max, Medium, Low); "
+        "optional doc_name, output_dir, output_file_name. Uses async 202 polling when applicable."
     ),
 )
-async def create_barcode(
-    text: str,
-    barcode_type: str = "qrCode",
-    hide_text: bool = False,
-    use_async: bool = True,
+async def compress_image(
+    image_file_path: str,
+    image_type: ImageTypeOption = "JPG",
+    compression_level: CompressionLevelOption = "Medium",
+    doc_name: Optional[str] = None,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
-    PDF4ME_API_KEY = config.api_key
-    if not PDF4ME_API_KEY:
+    pdf4me_api_key = config.api_key
+    if not pdf4me_api_key:
         return ToolResult(
             content="Authentication failed: no API key provided in the request."
         )
 
-    resolved_output_dir = output_dir if output_dir else os.getcwd()
-    resolved_output_name = output_file_name if output_file_name else "barcode.png"
+    try:
+        img_b64, _ext = file_to_base64(image_file_path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read image file: {exc}")
+
+    resolved_doc_name = doc_name or os.path.basename(image_file_path)
+
+    payload: dict[str, Any] = {
+        "docContent": img_b64,
+        "docName": resolved_doc_name,
+        "imageType": image_type,
+        "compressionLevel": compression_level,
+        "isAsync": True,
+    }
+
+    resolved_output_dir = (
+        output_dir if output_dir else os.path.dirname(os.path.abspath(image_file_path))
+    )
+    resolved_output_name = output_file_name or None
 
     try:
-        image_bytes = await _call_create_barcode_api(
-            text=text,
-            barcode_type=barcode_type,
-            hide_text=hide_text,
-            PDF4ME_API_KEY=PDF4ME_API_KEY,
-            use_async=use_async,
-        )
+        image_bytes, api_suggested_name = await _call_compress_image_api(payload, pdf4me_api_key)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:
             return ToolResult(
@@ -175,9 +191,15 @@ async def create_barcode(
     if not image_bytes:
         return ToolResult(content="Unexpected API response — no image data returned.")
 
+    final_name = (
+        resolved_output_name
+        or api_suggested_name
+        or f"compressed_{os.path.basename(image_file_path)}"
+    )
+
     try:
         output_path = write_file_from_bytes(
-            image_bytes, resolved_output_dir, resolved_output_name
+            image_bytes, resolved_output_dir, final_name
         )
     except OSError as exc:
         return ToolResult(
@@ -185,9 +207,10 @@ async def create_barcode(
         )
 
     return ToolResult(
-        content=f"Barcode image created successfully. Saved to {output_path}",
+        content=f"Compressed image saved successfully to {output_path}",
         structured_content={
             "output_path": output_path,
-            "barcode_type": barcode_type,
+            "image_type": image_type,
+            "compression_level": compression_level,
         },
     )

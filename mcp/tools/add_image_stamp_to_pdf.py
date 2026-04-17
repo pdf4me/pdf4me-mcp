@@ -99,7 +99,7 @@ def _build_payload(
         "alignX": align_x,
         "alignY": align_y,
         "pages": pages,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     if height_in_mm is not None:
         payload["heightInMM"] = height_in_mm

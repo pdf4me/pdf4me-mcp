@@ -39,7 +39,7 @@ async def _call_linearize_api(
         "docContent": doc_content_base64,
         "docName": doc_name,
         "optimizeProfile": optimize_profile,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {

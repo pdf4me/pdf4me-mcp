@@ -6,8 +6,8 @@ from typing import Any, Literal, Optional
 
 import httpx
 
-from fastmcp.tools.function_tool import tool
 from fastmcp.tools import ToolResult
+from fastmcp.tools.function_tool import tool
 
 from config import config
 from helper import file_to_base64, resolve_polling_url, write_file_from_bytes
@@ -25,7 +25,7 @@ def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
 def _docdata_b64_from_json(obj: Any, *, depth: int = 0) -> Optional[str]:
     if depth > 12 or not isinstance(obj, dict):
         return None
-    for dk in ("docContent", "DocContent", "docData", "DocData"):
+    for dk in ("docContent", "DocContent", "docData", "DocData", "File Content", "fileContent"):
         v = obj.get(dk)
         if isinstance(v, str) and v:
             return v
@@ -49,10 +49,9 @@ def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
     if body.startswith(b"%PDF"):
         return body
 
-    trimmed = _strip_utf8_bom_and_leading_ws(raw)
-    if trimmed.startswith((b"{", b"[")):
+    if body.startswith((b"{", b"[")):
         try:
-            payload = json.loads(trimmed.decode("utf-8"))
+            payload = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError(f"Invalid JSON in response: {exc}") from exc
         if not isinstance(payload, dict):
@@ -70,71 +69,7 @@ def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
     )
 
 
-def _build_payload(
-    doc_name: str,
-    doc_content_base64: str,
-    html_content: str,
-    location: str,
-    pages: str,
-    skip_first_page: Optional[bool],
-    margin_left: Optional[float],
-    margin_right: Optional[float],
-    margin_top: Optional[float],
-    margin_bottom: Optional[float],
-    use_async: bool,
-) -> dict:
-    payload: dict = {
-        "docName": doc_name,
-        "docContent": doc_content_base64,
-        "htmlContent": html_content,
-        "location": location,
-        "pages": pages,
-        "isAsync": True,
-    }
-    if skip_first_page is not None:
-        payload["skipFirstPage"] = skip_first_page
-    if margin_left is not None:
-        payload["marginLeft"] = margin_left
-    if margin_right is not None:
-        payload["marginRight"] = margin_right
-    if margin_top is not None:
-        payload["marginTop"] = margin_top
-    if margin_bottom is not None:
-        payload["marginBottom"] = margin_bottom
-    return payload
-
-
-async def _call_add_html_header_footer_api(
-    payload: dict,
-    PDF4ME_API_KEY: str,
-) -> bytes:
-    api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/AddHtmlHeaderFooter"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Basic {PDF4ME_API_KEY}",
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        if resp.status_code == 202:
-            location = resp.headers.get("Location")
-            if not location:
-                raise ValueError(
-                    "API returned 202 Accepted but no Location header for polling"
-                )
-            poll_url = resolve_polling_url(api_base_url, location)
-            return await _poll_add_html_header_footer_job(
-                client,
-                poll_url,
-                headers,
-                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
-                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
-            )
-        resp.raise_for_status()
-        return _bytes_from_pdf_response(resp)
-
-
-async def _poll_add_html_header_footer_job(
+async def _poll_delete_blank_pages_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
@@ -152,35 +87,57 @@ async def _poll_add_html_header_footer_job(
             continue
         poll.raise_for_status()
     raise TimeoutError(
-        f"AddHtmlHeaderFooter did not finish after {max_attempts} polls ({interval_sec}s apart)"
+        f"DeleteBlankPages did not finish after {max_attempts} polls ({interval_sec}s apart)"
     )
 
 
+async def _call_delete_blank_pages_api(payload: dict[str, Any], pdf4me_api_key: str) -> bytes:
+    api_base_url = config.pdf4me_base_url.rstrip("/")
+    url = f"{api_base_url}/api/v2/DeleteBlankPages"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {pdf4me_api_key}",
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        if resp.status_code == 202:
+            location = resp.headers.get("Location")
+            if not location:
+                raise ValueError(
+                    "API returned 202 Accepted but no Location header for polling"
+                )
+            poll_url = resolve_polling_url(api_base_url, location)
+            return await _poll_delete_blank_pages_job(
+                client,
+                poll_url,
+                headers,
+                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
+                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
+            )
+        resp.raise_for_status()
+        return _bytes_from_pdf_response(resp)
+
+
+DeletePageOption = Literal["NoTextNoImages", "NoText", "NoImages"]
+
+
 @tool(
-    name="add_html_header_footer_to_pdf",
+    name="delete_blank_pages_from_pdf",
     description=(
-        "Add HTML as header, footer, or both on PDF pages using PDF4me AddHtmlHeaderFooter (/api/v2/AddHtmlHeaderFooter). "
-        "html_content is a plain HTML string (not base64). header_footer_location is Header, Footer, or Both. "
-        "Optional: pages (empty string = all), skip_first_page, pixel margins, output path."
+        "Delete blank pages from a PDF via PDF4me DeleteBlankPages (/api/v2/DeleteBlankPages). "
+        "Provide pdf_file_path and delete_page_option "
+        "(NoTextNoImages, NoText, NoImages). Saves cleaned PDF to disk."
     ),
 )
-async def add_html_header_footer_to_pdf(
+async def delete_blank_pages_from_pdf(
     pdf_file_path: str,
-    html_content: str,
-    header_footer_location: Literal["Header", "Footer", "Both"],
-    use_async: bool = True,
+    delete_page_option: DeletePageOption = "NoTextNoImages",
     request_doc_name: Optional[str] = None,
-    pages: str = "",
-    skip_first_page: Optional[bool] = None,
-    margin_left: Optional[float] = None,
-    margin_right: Optional[float] = None,
-    margin_top: Optional[float] = None,
-    margin_bottom: Optional[float] = None,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
-    PDF4ME_API_KEY = config.api_key
-    if not PDF4ME_API_KEY:
+    pdf4me_api_key = config.api_key
+    if not pdf4me_api_key:
         return ToolResult(
             content="Authentication failed: no API key provided in the request."
         )
@@ -191,38 +148,28 @@ async def add_html_header_footer_to_pdf(
         return ToolResult(content=f"Could not read PDF file: {exc}")
 
     if pdf_ext.lower() != ".pdf":
-        return ToolResult(
-            content=f"Source file must be a PDF, got '{pdf_ext}' instead."
-        )
+        return ToolResult(content=f"Source file must be a PDF, got '{pdf_ext}' instead.")
 
     doc_name = request_doc_name or os.path.basename(pdf_file_path)
     if not doc_name.lower().endswith(".pdf"):
         doc_name = f"{doc_name}.pdf"
 
-    payload = _build_payload(
-        doc_name=doc_name,
-        doc_content_base64=pdf_b64,
-        html_content=html_content,
-        location=header_footer_location,
-        pages=pages,
-        skip_first_page=skip_first_page,
-        margin_left=margin_left,
-        margin_right=margin_right,
-        margin_top=margin_top,
-        margin_bottom=margin_bottom,
-        use_async=use_async,
-    )
+    payload: dict[str, Any] = {
+        "docContent": pdf_b64,
+        "docName": doc_name,
+        "deletePageOption": delete_page_option,
+        "isAsync": True,
+    }
 
     resolved_output_dir = (
         output_dir if output_dir else os.path.dirname(os.path.abspath(pdf_file_path))
     )
     resolved_output_name = (
-        output_file_name if output_file_name
-        else f"html_header_footer_{os.path.basename(pdf_file_path)}"
+        output_file_name if output_file_name else f"blank_pages_removed_{doc_name}"
     )
 
     try:
-        pdf_bytes = await _call_add_html_header_footer_api(payload, PDF4ME_API_KEY)
+        pdf_bytes = await _call_delete_blank_pages_api(payload, pdf4me_api_key)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:
             return ToolResult(
@@ -249,10 +196,10 @@ async def add_html_header_footer_to_pdf(
         )
 
     return ToolResult(
-        content=f"PDF with HTML header/footer saved successfully to {output_path}",
+        content=f"PDF with blank pages removed saved successfully to {output_path}",
         structured_content={
             "output_path": output_path,
             "doc_name": doc_name,
-            "location": header_footer_location,
+            "delete_page_option": delete_page_option,
         },
     )

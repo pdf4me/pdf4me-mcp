@@ -6,8 +6,8 @@ from typing import Any, Literal, Optional
 
 import httpx
 
-from fastmcp.tools.function_tool import tool
 from fastmcp.tools import ToolResult
+from fastmcp.tools.function_tool import tool
 
 from config import config
 from helper import file_to_base64, resolve_polling_url, write_file_from_bytes
@@ -64,74 +64,7 @@ def _bytes_from_image_response(resp: httpx.Response) -> bytes:
     )
 
 
-def _build_payload(
-    doc_name: str,
-    doc_content_b64: str,
-    watermark_file_name: str,
-    watermark_file_b64: str,
-    position: str,
-    opacity: Optional[float],
-    horizontal_offset: Optional[int],
-    vertical_offset: Optional[int],
-    position_x: Optional[float],
-    position_y: Optional[float],
-    rotation: Optional[float],
-    use_async: bool,
-) -> dict:
-    payload: dict = {
-        "docName": doc_name,
-        "docContent": doc_content_b64,
-        "WatermarkFileName": watermark_file_name,
-        "WatermarkFileContent": watermark_file_b64,
-        "Position": position,
-        "isAsync": True,
-    }
-    if opacity is not None:
-        payload["Opacity"] = opacity
-    if horizontal_offset is not None:
-        payload["HorizontalOffset"] = horizontal_offset
-    if vertical_offset is not None:
-        payload["VerticalOffset"] = vertical_offset
-    if position_x is not None:
-        payload["PositionX"] = position_x
-    if position_y is not None:
-        payload["PositionY"] = position_y
-    if rotation is not None:
-        payload["Rotation"] = rotation
-    return payload
-
-
-async def _call_add_image_watermark_api(
-    payload: dict,
-    PDF4ME_API_KEY: str,
-) -> bytes:
-    api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/AddImageWatermarkToImage"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Basic {PDF4ME_API_KEY}",
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        if resp.status_code == 202:
-            location = resp.headers.get("Location")
-            if not location:
-                raise ValueError(
-                    "API returned 202 Accepted but no Location header for polling"
-                )
-            poll_url = resolve_polling_url(api_base_url, location)
-            return await _poll_add_image_watermark_job(
-                client,
-                poll_url,
-                headers,
-                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
-                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
-            )
-        resp.raise_for_status()
-        return _bytes_from_image_response(resp)
-
-
-async def _poll_add_image_watermark_job(
+async def _poll_crop_image_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
@@ -149,91 +82,130 @@ async def _poll_add_image_watermark_job(
             continue
         poll.raise_for_status()
     raise TimeoutError(
-        f"AddImageWatermarkToImage did not finish after {max_attempts} polls ({interval_sec}s apart)"
+        f"CropImage did not finish after {max_attempts} polls ({interval_sec}s apart)"
     )
 
 
-PositionOption = Literal[
-    "topright",
-    "topleft",
-    "bottomright",
-    "bottomleft",
-    "centralhorizontal",
-    "diagonal",
-    "centralvertical",
-    "custom",
-]
+async def _call_crop_image_api(
+    payload: dict[str, Any],
+    crop_type: str,
+    pdf4me_api_key: str,
+) -> bytes:
+    api_base_url = config.pdf4me_base_url.rstrip("/")
+    url = f"{api_base_url}/api/v2/CropImage?schemaVal={crop_type}"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {pdf4me_api_key}",
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        if resp.status_code == 202:
+            location = resp.headers.get("Location")
+            if not location:
+                raise ValueError(
+                    "API returned 202 Accepted but no Location header for polling"
+                )
+            poll_url = resolve_polling_url(api_base_url, location)
+            return await _poll_crop_image_job(
+                client,
+                poll_url,
+                headers,
+                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
+                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
+            )
+        resp.raise_for_status()
+        return _bytes_from_image_response(resp)
+
+
+CropTypeOption = Literal["Border", "Rectangle"]
 
 
 @tool(
-    name="add_image_watermark_to_image",
+    name="crop_image",
     description=(
-        "Overlay a watermark image on a source image via PDF4me AddImageWatermarkToImage (/api/v2/AddImageWatermarkToImage). "
-        "Provide image_file_path, watermark_image_file_path, and position "
-        "(topright, topleft, bottomright, bottomleft, centralhorizontal, diagonal, centralvertical, custom). "
-        "Optional: opacity (0.0–1.0), horizontal/vertical offset, position_x/y for custom, rotation (degrees), output path."
+        "Crop an image via PDF4me CropImage (/api/v2/CropImage). "
+        "Choose crop_type Border or Rectangle. "
+        "Border: set left/right/top/bottom border in pixels. "
+        "Rectangle: set upper_left_x/y and width/height."
     ),
 )
-async def add_image_watermark_to_image(
+async def crop_image(
     image_file_path: str,
-    watermark_image_file_path: str,
-    position: PositionOption,
-    use_async: bool = True,
+    crop_type: CropTypeOption = "Border",
+    left_border: Optional[int] = None,
+    right_border: Optional[int] = None,
+    top_border: Optional[int] = None,
+    bottom_border: Optional[int] = None,
+    upper_left_x: Optional[int] = None,
+    upper_left_y: Optional[int] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
     doc_name: Optional[str] = None,
-    watermark_file_name: Optional[str] = None,
-    opacity: Optional[float] = None,
-    horizontal_offset: Optional[int] = None,
-    vertical_offset: Optional[int] = None,
-    position_x: Optional[float] = None,
-    position_y: Optional[float] = None,
-    rotation: Optional[float] = None,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
-    PDF4ME_API_KEY = config.api_key
-    if not PDF4ME_API_KEY:
+    pdf4me_api_key = config.api_key
+    if not pdf4me_api_key:
         return ToolResult(
             content="Authentication failed: no API key provided in the request."
         )
 
     try:
-        src_b64, _ = file_to_base64(image_file_path)
+        img_b64, _ = file_to_base64(image_file_path)
     except OSError as exc:
         return ToolResult(content=f"Could not read source image: {exc}")
 
-    try:
-        wm_b64, _ = file_to_base64(watermark_image_file_path)
-    except OSError as exc:
-        return ToolResult(content=f"Could not read watermark image: {exc}")
+    if crop_type == "Border":
+        if any(v is None for v in (left_border, right_border, top_border, bottom_border)):
+            return ToolResult(
+                content=(
+                    "For crop_type='Border', provide left_border, right_border, "
+                    "top_border, and bottom_border."
+                )
+            )
+    else:
+        if any(v is None for v in (upper_left_x, upper_left_y, width, height)):
+            return ToolResult(
+                content=(
+                    "For crop_type='Rectangle', provide upper_left_x, upper_left_y, "
+                    "width, and height."
+                )
+            )
 
     resolved_doc_name = doc_name or os.path.basename(image_file_path)
-    resolved_wm_name = watermark_file_name or os.path.basename(watermark_image_file_path)
+    payload: dict[str, Any] = {
+        "docName": resolved_doc_name,
+        "docContent": img_b64,
+        "CropType": crop_type,
+        "isAsync": True,
+    }
 
-    payload = _build_payload(
-        doc_name=resolved_doc_name,
-        doc_content_b64=src_b64,
-        watermark_file_name=resolved_wm_name,
-        watermark_file_b64=wm_b64,
-        position=position,
-        opacity=opacity,
-        horizontal_offset=horizontal_offset,
-        vertical_offset=vertical_offset,
-        position_x=position_x,
-        position_y=position_y,
-        rotation=rotation,
-        use_async=use_async,
-    )
+    if left_border is not None:
+        payload["LeftBorder"] = str(left_border)
+    if right_border is not None:
+        payload["RightBorder"] = str(right_border)
+    if top_border is not None:
+        payload["TopBorder"] = str(top_border)
+    if bottom_border is not None:
+        payload["BottomBorder"] = str(bottom_border)
+    if upper_left_x is not None:
+        payload["UpperLeftX"] = upper_left_x
+    if upper_left_y is not None:
+        payload["UpperLeftY"] = upper_left_y
+    if width is not None:
+        payload["Width"] = width
+    if height is not None:
+        payload["Height"] = height
 
     resolved_output_dir = (
         output_dir if output_dir else os.path.dirname(os.path.abspath(image_file_path))
     )
     resolved_output_name = (
-        output_file_name if output_file_name
-        else f"watermarked_{os.path.basename(image_file_path)}"
+        output_file_name if output_file_name else f"cropped_{os.path.basename(image_file_path)}"
     )
 
     try:
-        image_bytes = await _call_add_image_watermark_api(payload, PDF4ME_API_KEY)
+        image_bytes = await _call_crop_image_api(payload, crop_type, pdf4me_api_key)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:
             return ToolResult(
@@ -260,9 +232,9 @@ async def add_image_watermark_to_image(
         )
 
     return ToolResult(
-        content=f"Watermarked image saved successfully to {output_path}",
+        content=f"Cropped image saved successfully to {output_path}",
         structured_content={
             "output_path": output_path,
-            "position": position,
+            "crop_type": crop_type,
         },
     )
