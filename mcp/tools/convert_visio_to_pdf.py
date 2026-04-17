@@ -53,7 +53,7 @@ async def _call_convert_visio_to_pdf_api(
         "SaveForegroundPage": save_foreground_page,
         "SaveToolBar": save_tool_bar,
         "AutoFit": auto_fit,
-        "async": use_async,
+        "isAsync": use_async,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {

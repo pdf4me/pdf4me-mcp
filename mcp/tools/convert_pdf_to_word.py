@@ -97,7 +97,7 @@ async def _call_convert_pdf_to_word_api(
         "mergeAllSheets": merge_all_sheets,
         "outputFormat": "Docx",
         "ocrWhenNeeded": "true" if ocr_when_needed else "false",
-        "async": use_async,
+        "isAsync": use_async,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {

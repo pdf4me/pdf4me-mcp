@@ -48,7 +48,7 @@ async def _call_fill_pdf_form_api(
         "metaData": "",
         "metaDataJson": "",
         "InputFormData": _input_form_data_from_dict(form_data),
-        "async": use_async,
+        "isAsync": use_async,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {

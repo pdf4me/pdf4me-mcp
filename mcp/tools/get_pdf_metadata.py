@@ -46,7 +46,7 @@ async def _call_metadata_api(
     payload = {
         "docContent": doc_content_base64,
         "docName": doc_name,
-        "async": use_async,
+        "isAsync": use_async,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {

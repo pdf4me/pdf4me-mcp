@@ -11,7 +11,7 @@ from config import config
 from helper import file_to_base64, write_file_from_bytes
 
 _ASYNC_POLL_MAX_ATTEMPTS = 25
-_ASYNC_POLL_INTERVAL_SEC = 10.0
+_ASYNC_POLL_INTERVAL_SEC = 5.0
 
 
 def _bytes_from_response(resp: httpx.Response) -> bytes:
@@ -33,7 +33,7 @@ async def _call_convert_to_pdf_api(
     payload = {
         "docContent": doc_content_base64,
         "docName": doc_name,
-        "async": use_async,
+        "isAsync": use_async,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {

@@ -44,7 +44,7 @@ async def _call_convert_image_format_api(
         "docName": doc_name,
         "currentImageFormat": current_image_format,
         "newImageFormat": new_image_format,
-        "async": use_async,
+        "isAsync": use_async,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {

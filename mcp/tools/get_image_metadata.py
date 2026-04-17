@@ -48,7 +48,7 @@ async def _call_image_metadata_api(
         "docContent": doc_content_base64,
         "docName": doc_name,
         "imageType": image_type,
-        "async": use_async,
+        "isAsync": use_async,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
