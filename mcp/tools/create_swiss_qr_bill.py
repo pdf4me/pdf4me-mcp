@@ -1,7 +1,7 @@
 import asyncio
 import os
 from enum import StrEnum
-from typing import Any, Optional, TypeVar
+from typing import Any, Literal, Optional, TypeVar
 
 import httpx
 
@@ -54,6 +54,17 @@ class SeperatorLine(StrEnum):
     LINE_WITH_SCISSOR = "LineWithScissor"
     LINE = "Line"
     NONE = "None"
+
+
+
+LAddressType = Literal["S", "K"]
+LCurrency = Literal["CHF", "EUR"]
+LLanguageType = Literal["German", "French", "Italian", "English"]
+LReferenceType = Literal["QRR", "SCOR", "NON"]
+LSeperatorLine = Literal["LineWithScissor", "Line", "None"]
+
+_SWISS_QR_DEFAULT_OUTPUT_BASENAME = "swiss_qr_bill.pdf"
+
 
 
 _E = TypeVar("_E", bound=StrEnum)
@@ -241,7 +252,9 @@ async def _poll_create_swiss_qr_bill_job(
         "referenceType QRR|SCOR|NON; seperatorLine LineWithScissor|Line|None (string None). "
         "All other schema fields are optional (amount, creditor/debtor address lines, reference, etc.). "
         "Reads the source PDF from pdf_file_path (docContent base64); optional document_name overrides "
-        "document.Name (defaults to the file basename). Saves PDF output; optional isAsync / 202 polling."
+        "document.Name (defaults to the file basename). Output PDF name is output_file_name if set, "
+        f"otherwise {_SWISS_QR_DEFAULT_OUTPUT_BASENAME!r}. Saves next to the PDF unless output_dir is set; "
+        "optional isAsync / 202 polling."
     ),
 )
 async def create_swiss_qr_bill_http(
@@ -249,7 +262,7 @@ async def create_swiss_qr_bill_http(
     iban: str,
     cr_name: str,
     document_name: Optional[str] = None,
-    cr_address_type: str | AddressTypeSK = AddressTypeSK.S,
+    cr_address_type: LAddressType = "S",
     amount: Optional[str] = None,
     av1_parameters: Optional[str] = None,
     av2_parameters: Optional[str] = None,
@@ -258,12 +271,12 @@ async def create_swiss_qr_bill_http(
     cr_postal_code: Optional[str] = None,
     cr_street_or_address_line1: Optional[str] = None,
     cr_street_or_address_line2: Optional[str] = None,
-    currency: Optional[str | CurrencyCode] = None,
-    language_type: Optional[str | LanguageType] = None,
+    currency: LCurrency = "CHF",
+    language_type: LLanguageType = "English",
     reference: Optional[str] = None,
-    reference_type: Optional[str | ReferenceType] = None,
-    seperator_line: Optional[str | SeperatorLine] = None,
-    ud_address_type: Optional[str | AddressTypeSK] = None,
+    reference_type: LReferenceType = "QRR",
+    seperator_line: LSeperatorLine = "LineWithScissor",
+    ud_address_type: Optional[LAddressType] = None,
     ud_city: Optional[str] = None,
     ud_name: Optional[str] = None,
     ud_postal_code: Optional[str] = None,
@@ -386,15 +399,10 @@ async def create_swiss_qr_bill_http(
             content="Unexpected API response — PDF bytes missing or invalid after CreateSwissQrBill."
         )
 
-    if output_file_name:
-        resolved_output_name = output_file_name
-    elif header_file_name and header_file_name.strip():
-        resolved_output_name = os.path.basename(header_file_name.strip())
-    elif resolved_document_name:
-        stem, _ = os.path.splitext(resolved_document_name)
-        resolved_output_name = f"swiss_qr_{stem}.pdf"
+    if output_file_name and output_file_name.strip():
+        resolved_output_name = output_file_name.strip()
     else:
-        resolved_output_name = "swiss_qr_bill.pdf"
+        resolved_output_name = _SWISS_QR_DEFAULT_OUTPUT_BASENAME
     if not resolved_output_name.lower().endswith(".pdf"):
         resolved_output_name = f"{resolved_output_name}.pdf"
 
