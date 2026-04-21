@@ -135,15 +135,14 @@ async def _call_process_invoice_api(
 )
 async def process_invoice(
     pdf_file_path: Optional[str] = None,
-    doc_content: Optional[str] = None,
     doc_name: Optional[str] = None,
     custom_field_keys: Optional[list[str]] = None,
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = doc_content is not None and str(doc_content).strip() != ""
+    has_content = False
 
-    if has_path == has_content:
+    if not has_path:
         return ToolResult(
             content=(
                 "Provide exactly one of pdf_file_path (local invoice file) or "

@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import unquote, urlparse
 
 import httpx
 
@@ -17,7 +18,50 @@ _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 _ALLOWED_INPUT_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg"})
-_DEFAULT_DOC_NAME = "cheque.pdf"
+_DEFAULT_DOC_NAME = "shipping_label.pdf"
+
+
+def _strip_data_url_prefix(content: str) -> str:
+    """If doc_content is a data URL, return only the part after the first comma."""
+    s = content.strip()
+    if s.lower().startswith("data:") and "," in s:
+        return s.split(",", 1)[1].strip()
+    return s
+
+
+def _sanitize_profiles(profiles: Optional[str]) -> Optional[str]:
+    """Trim; omit empty. If non-empty and not already JSON-like with { or [, wrap in braces."""
+    if profiles is None:
+        return None
+    s = str(profiles).strip()
+    if not s:
+        return None
+    if s.startswith("{") or s.startswith("["):
+        return s
+    return "{" + s + "}"
+
+
+def _resolve_shipping_label_doc_name(
+    user_doc_name: Optional[str],
+    *,
+    has_path: bool,
+    path: Optional[str],
+    content_for_api: str,
+) -> str:
+    """docName rules: file basename or user; URL prefers user docName then URL segment; else user or default."""
+    user = (user_doc_name or "").strip()
+    if has_path and path:
+        return user or os.path.basename(path)
+    u = content_for_api.strip()
+    if u.lower().startswith(("http://", "https://")):
+        if user:
+            return user
+        parsed = urlparse(u)
+        seg = unquote(os.path.basename(parsed.path.rstrip("/")))
+        if seg:
+            return seg
+        return user or _DEFAULT_DOC_NAME
+    return user or _DEFAULT_DOC_NAME
 
 
 def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
@@ -30,7 +74,7 @@ def _json_dict_from_response(resp: httpx.Response) -> dict[str, Any]:
     body = _strip_utf8_bom_and_leading_ws(resp.content)
     if not body.startswith(b"{"):
         raise ValueError(
-            f"Expected JSON object from ProcessBankCheque, got content-type "
+            f"Expected JSON object from ProcessShippingLabel, got content-type "
             f"{(resp.headers.get('content-type') or '')!r}"
         )
     try:
@@ -38,18 +82,16 @@ def _json_dict_from_response(resp: httpx.Response) -> dict[str, Any]:
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"Invalid JSON in response: {exc}") from exc
     if not isinstance(parsed, dict):
-        raise ValueError("Expected JSON object from ProcessBankCheque")
+        raise ValueError("Expected JSON object from ProcessShippingLabel")
     return parsed
 
 
-def _effective_cheque_dict(result: dict[str, Any]) -> dict[str, Any]:
+def _effective_label_dict(result: dict[str, Any]) -> dict[str, Any]:
     for key in (
-        "processBankChequeModel",
-        "ProcessBankChequeModel",
-        "bankChequeData",
-        "BankChequeData",
-        "chequeData",
-        "ChequeData",
+        "processShippingLabelModel",
+        "ProcessShippingLabelModel",
+        "shippingLabelData",
+        "ShippingLabelData",
     ):
         inner = result.get(key)
         if isinstance(inner, dict):
@@ -58,21 +100,21 @@ def _effective_cheque_dict(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "cheque"
+    stem = Path(doc_name).stem or "shipping_label"
     slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "cheque"
+    return slug or "shipping_label"
 
 
-def _default_output_dir_for_file(cheque_file_path: str) -> str:
-    p = Path(cheque_file_path).resolve()
-    return str(p.parent / f"process_bank_cheque_{p.stem}")
+def _default_output_dir_for_file(file_path: str) -> str:
+    p = Path(file_path).resolve()
+    return str(p.parent / f"process_shipping_label_{p.stem}")
 
 
 def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_bank_cheque_{_slug_from_doc_name(doc_name)}")
+    return str(Path.cwd() / f"process_shipping_label_{_slug_from_doc_name(doc_name)}")
 
 
-async def _poll_process_bank_cheque_job(
+async def _poll_process_shipping_label_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
@@ -90,16 +132,16 @@ async def _poll_process_bank_cheque_job(
             continue
         poll.raise_for_status()
     raise TimeoutError(
-        f"ProcessBankCheque did not finish after {max_attempts} polls ({interval_sec}s apart)"
+        f"ProcessShippingLabel did not finish after {max_attempts} polls ({interval_sec}s apart)"
     )
 
 
-async def _call_process_bank_cheque_api(
+async def _call_process_shipping_label_api(
     payload: dict[str, Any],
     pdf4me_api_key: str,
 ) -> dict[str, Any]:
     api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/ProcessBankCheque"
+    url = f"{api_base_url}/api/v2/ProcessShippingLabel"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Basic {pdf4me_api_key}",
@@ -113,7 +155,7 @@ async def _call_process_bank_cheque_api(
                     "API returned 202 Accepted but no Location header for polling"
                 )
             poll_url = resolve_polling_url(api_base_url, location)
-            final = await _poll_process_bank_cheque_job(
+            final = await _poll_process_shipping_label_job(
                 client,
                 poll_url,
                 headers,
@@ -126,25 +168,24 @@ async def _call_process_bank_cheque_api(
 
 
 @tool(
-    name="process_bank_cheque",
-    title="AI-Process Bank Cheque",
+    name="process_shipping_label",
+    title="AI-Process Shipping Label",
     description=(
-        "AI-Process Bank Cheque: extract structured data from a bank cheque via PDF4me "
-        "POST /api/v2/ProcessBankCheque (isAsync true: 202 + Location poll until JSON result). "
-        "Request body uses isAsync (camelCase) and CustomFieldKeys (PascalCase) when custom keys are sent—"
-        "not the IsAsync/customFieldKeys shape used by AI-Invoice Parser. "
-        "Provide exactly one of: pdf_file_path (local .pdf/.png/.jpg/.jpeg as Base64) "
-        "or doc_content (Base64, blob id, or URL per your PDF4me setup). "
-        "doc_name: logical file name (e.g. cheque.pdf); optional with pdf_file_path (defaults to basename), "
-        f"defaults to {_DEFAULT_DOC_NAME!r} when using doc_content if omitted. "
-        "Optional custom_field_keys: include only as a non-empty list (property omitted when unused). "
-        "Saves the full API JSON to process_bank_cheque.json."
+        "AI-Process Shipping Label (processShippingLabel): extract structured data via PDF4me "
+        "POST /api/v2/ProcessShippingLabel. Body: docName (non-empty), docContent, isAsync (true), optional profiles. "
+        "docName resolution: binary/file path uses doc_name if set else basename; URL uses trimmed doc_name if provided "
+        "else last URL path segment (decoded) else falls back to "
+        f"{_DEFAULT_DOC_NAME!r}; base64/blob uses doc_name or {_DEFAULT_DOC_NAME!r}. "
+        "Exactly one of pdf_file_path or doc_content (PDF base64, blob id, or URL). "
+        "Optional profiles: trim, omit if empty; wrap in outer braces when not starting with an opening curly brace "
+        "or square bracket. "
+        "Data URL doc_content: strip prefix before first comma. 202 + Location poll; saves process_shipping_label.json."
     ),
 )
-async def process_bank_cheque(
+async def process_shipping_label(
     pdf_file_path: Optional[str] = None,
     doc_name: Optional[str] = None,
-    custom_field_keys: Optional[list[str]] = None,
+    profiles: Optional[str] = None,
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
@@ -153,8 +194,8 @@ async def process_bank_cheque(
     if not has_path:
         return ToolResult(
             content=(
-                "Provide exactly one of pdf_file_path (local cheque image/PDF) or "
-                "doc_content (Base64, blob id, or URL per your integration)."
+                "Provide exactly one of pdf_file_path (local shipping label file) or "
+                "doc_content (Base64, data URL, blob id, or URL per your integration)."
             )
         )
 
@@ -164,12 +205,13 @@ async def process_bank_cheque(
             content="Authentication failed: no API key provided in the request."
         )
 
+    path: Optional[str] = None
     if has_path:
         path = str(pdf_file_path).strip()
         try:
             encoded, ext = file_to_base64(path)
         except OSError as exc:
-            return ToolResult(content=f"Could not read cheque file: {exc}")
+            return ToolResult(content=f"Could not read file: {exc}")
         ext_lower = ext.lower()
         if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
             return ToolResult(
@@ -179,32 +221,37 @@ async def process_bank_cheque(
                 )
             )
         content_for_api = encoded
-        resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(path)
     else:
-        content_for_api = str(doc_content).strip()
-        resolved_doc_name = (doc_name or "").strip() or _DEFAULT_DOC_NAME
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(resolved_doc_name)
+        raw_content = str(doc_content).strip()
+        content_for_api = _strip_data_url_prefix(raw_content)
+
+    resolved_doc_name = _resolve_shipping_label_doc_name(
+        doc_name, has_path=has_path, path=path, content_for_api=content_for_api
+    )
 
     _suffixes = tuple(_ALLOWED_INPUT_EXTENSIONS)
     if not resolved_doc_name.lower().endswith(_suffixes):
         if "." not in resolved_doc_name.lower():
             resolved_doc_name = f"{resolved_doc_name}.pdf"
 
+    if has_path and path:
+        resolved_out = output_dir if output_dir else _default_output_dir_for_file(path)
+    else:
+        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(resolved_doc_name)
+
     payload: dict[str, Any] = {
-        "docContent": content_for_api,
         "docName": resolved_doc_name,
+        "docContent": content_for_api,
         "isAsync": True,
     }
-    if custom_field_keys:
-        keys = [k for k in custom_field_keys if isinstance(k, str) and k.strip()]
-        if keys:
-            payload["CustomFieldKeys"] = keys
+    sanitized_profiles = _sanitize_profiles(profiles)
+    if sanitized_profiles is not None:
+        payload["profiles"] = sanitized_profiles
 
     os.makedirs(resolved_out, exist_ok=True)
 
     try:
-        result = await _call_process_bank_cheque_api(payload, pdf4me_api_key)
+        result = await _call_process_shipping_label_api(payload, pdf4me_api_key)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:
             return ToolResult(
@@ -218,19 +265,19 @@ async def process_bank_cheque(
     except (ValueError, TimeoutError) as exc:
         return ToolResult(content=str(exc))
 
-    json_path = os.path.join(resolved_out, "process_bank_cheque.json")
+    json_path = os.path.join(resolved_out, "process_shipping_label.json")
     try:
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
     except OSError as exc:
         return ToolResult(content=f"Failed to write JSON: {exc}")
 
-    data = _effective_cheque_dict(result)
+    data = _effective_label_dict(result)
     success = data.get("success") if "success" in data else data.get("Success")
     message = data.get("message") if "message" in data else data.get("Message")
 
     summary = (
-        f"ProcessBankCheque result saved to {json_path}. "
+        f"ProcessShippingLabel result saved to {json_path}. "
         f"success={success!r}, message={message!r}."
     )
 
@@ -241,6 +288,6 @@ async def process_bank_cheque(
             "json_path": json_path,
             "success": success,
             "message": message,
-            "cheque": data,
+            "shipping_label": data,
         },
     )
