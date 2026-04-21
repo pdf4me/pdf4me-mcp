@@ -1,4 +1,4 @@
-from pdf4me_mcp.main import main
+from .main import main
 
 
 if __name__ == "__main__":
