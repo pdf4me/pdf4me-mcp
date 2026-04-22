@@ -40,7 +40,7 @@ async def _call_rotate_image_api(
         "Backgroundcolor": background_color,
         "ProportionateResize": proportionate_resize,
         "RotationAngle": rotation_angle,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -105,7 +105,6 @@ async def rotate_image_http(
     rotation_angle: int = 90,
     background_color: str = "#FFFFFF",
     proportionate_resize: bool = True,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

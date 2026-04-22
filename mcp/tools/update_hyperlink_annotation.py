@@ -36,7 +36,7 @@ async def _call_update_hyperlink_annotation_api(
         "docName": doc_name,
         "docContent": doc_content_base64,
         "updatehyperlinkannotationlist": updates,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -110,7 +110,6 @@ async def update_hyperlink_annotation_http(
     text_new_value: str,
     url_current_value: str,
     url_new_value: str,
-    use_async: bool = True,
     output_dir: str = "",
     output_file_name: str = "",
 ) -> ToolResult:

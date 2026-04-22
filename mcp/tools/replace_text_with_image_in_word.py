@@ -91,7 +91,7 @@ async def _call_replace_text_with_image_in_word_api(
         "IsFirstPageSkip": is_first_page_skip,
         "PageNumbers": page_numbers,
         "SearchText": search_text,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -160,7 +160,6 @@ async def replace_text_with_image_in_word_http(
     search_text: str,
     page_numbers: str = "1",
     is_first_page_skip: bool = False,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

@@ -54,7 +54,7 @@ async def _call_resize_image_api(
         "Width": width,
         "Height": height,
         "MaintainAspectRatio": maintain_aspect_ratio,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -121,7 +121,6 @@ async def resize_image_http(
     width: int = 800,
     height: int = 600,
     maintain_aspect_ratio: bool = True,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
