@@ -97,7 +97,7 @@ async def _call_convert_pdf_to_powerpoint_api(
         "ocrWhenNeeded": "true" if ocr_when_needed else "false",
         "outputFormat": "Pptx",
         "mergeAllSheets": merge_all_sheets,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -166,7 +166,6 @@ async def convert_pdf_to_powerpoint_http(
     language: str = "English",
     ocr_when_needed: bool = True,
     merge_all_sheets: bool = True,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

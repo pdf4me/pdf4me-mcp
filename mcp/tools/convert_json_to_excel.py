@@ -180,7 +180,6 @@ async def convert_json_to_excel_http(
     ignore_null_values: bool = False,
     first_row: int = 1,
     first_column: int = 1,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

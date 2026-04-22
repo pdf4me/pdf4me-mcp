@@ -191,7 +191,6 @@ async def add_image_stamp_to_pdf(
     image_file_path: str,
     align_x: Literal["Left", "Center", "Right"],
     align_y: Literal["Top", "Middle", "Bottom"],
-    use_async: bool = True,
     image_name: Optional[str] = None,
     request_doc_name: Optional[str] = None,
     pages: str = "",

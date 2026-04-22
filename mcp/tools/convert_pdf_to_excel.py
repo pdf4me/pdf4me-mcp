@@ -166,7 +166,6 @@ async def convert_pdf_to_excel_http(
     merge_all_sheets: bool = True,
     language: str = "English",
     ocr_when_needed: bool = True,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

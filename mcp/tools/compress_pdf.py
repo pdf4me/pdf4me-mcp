@@ -140,7 +140,6 @@ async def _poll_compress_job(
 async def compress_pdf_http(
     file_path: str,
     optimize_profile: Literal["Web", "Print", "Screen"] = "Web",
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

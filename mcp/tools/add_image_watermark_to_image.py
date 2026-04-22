@@ -178,7 +178,6 @@ async def add_image_watermark_to_image(
     image_file_path: str,
     watermark_image_file_path: str,
     position: PositionOption,
-    use_async: bool = True,
     doc_name: Optional[str] = None,
     watermark_file_name: Optional[str] = None,
     opacity: Optional[float] = None,

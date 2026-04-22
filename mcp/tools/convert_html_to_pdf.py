@@ -122,7 +122,6 @@ async def convert_html_to_pdf_http(
     right_margin: str = "40px",
     print_background: bool = True,
     display_header_footer: bool = True,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
