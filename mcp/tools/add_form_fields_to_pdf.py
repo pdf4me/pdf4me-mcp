@@ -139,7 +139,6 @@ async def add_form_fields_to_pdf(
     size: int,
     pages: str,
     form_field_type: Literal["TextBox", "CheckBox"],
-    use_async: bool = True,
     request_doc_name: Optional[str] = None,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,

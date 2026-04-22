@@ -143,7 +143,6 @@ async def _poll_add_attachment_job(
 async def add_attachment_to_pdf(
     pdf_file_path: str,
     attachment_file_paths: list[str],
-    use_async: bool = True,
     request_doc_name: Optional[str] = None,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,

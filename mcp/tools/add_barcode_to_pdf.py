@@ -200,7 +200,6 @@ async def add_barcode_to_pdf(
     align_x: Literal["Left", "Center", "Right"] = "Right",
     align_y: Literal["Top", "Middle", "Bottom"] = "Bottom",
     hide_text: bool = False,
-    use_async: bool = True,
     request_doc_name: Optional[str] = None,
     height_in_mm: Optional[str] = None,
     width_in_mm: Optional[str] = None,

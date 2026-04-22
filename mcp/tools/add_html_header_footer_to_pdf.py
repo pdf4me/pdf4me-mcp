@@ -168,7 +168,6 @@ async def add_html_header_footer_to_pdf(
     pdf_file_path: str,
     html_content: str,
     header_footer_location: Literal["Header", "Footer", "Both"],
-    use_async: bool = True,
     request_doc_name: Optional[str] = None,
     pages: str = "",
     skip_first_page: Optional[bool] = None,
