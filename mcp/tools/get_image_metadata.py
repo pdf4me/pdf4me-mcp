@@ -48,7 +48,7 @@ async def _call_image_metadata_api(
         "docContent": doc_content_base64,
         "docName": doc_name,
         "imageType": image_type,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -111,7 +111,6 @@ async def _poll_image_metadata_job(
 async def get_image_metadata_http(
     file_path: str,
     image_type: Literal["JPG", "PNG"] = "PNG",
-    use_async: bool = False,
 ) -> ToolResult:
     """Extract metadata from an image via PDF4me GetImageMetadata.
 

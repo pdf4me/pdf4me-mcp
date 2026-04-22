@@ -143,7 +143,6 @@ async def generate_documents_multiple_http(
     document_data_file_path: Optional[str] = None,
     file_meta_data: Optional[str] = None,
     meta_data_json: Optional[str] = None,
-    use_async: bool = True,
 ) -> ToolResult:
     """Generate multiple documents from a template plus JSON/XML data via PDF4me.
 
@@ -213,7 +212,7 @@ async def generate_documents_multiple_http(
         "templateFileData": template_file_data,
         "documentDataType": document_data_type.strip(),
         "outputType": output_type.strip(),
-        "async": use_async,
+        "async": True,
     }
     if document_data_text is not None:
         payload["documentDataText"] = document_data_text

@@ -138,7 +138,6 @@ async def generate_document_single_http(
     document_data_file_path: Optional[str] = None,
     file_meta_data: Optional[str] = None,
     meta_data_json: Optional[str] = None,
-    use_async: bool = True,
 ) -> ToolResult:
     """Generate one document from template + data via PDF4me.
 

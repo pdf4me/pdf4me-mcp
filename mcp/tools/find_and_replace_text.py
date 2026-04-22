@@ -148,7 +148,6 @@ async def find_and_replace_text(
     new_text: str,
     page_sequence: str = "1",
     request_doc_name: Optional[str] = None,
-    is_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
@@ -181,8 +180,7 @@ async def find_and_replace_text(
         "newText": new_text,
         "pageSequence": page_sequence.strip(),
     }
-    if is_async:
-        payload["async"] = True
+    payload["async"] = True
 
     resolved_output_dir = (
         output_dir if output_dir else os.path.dirname(os.path.abspath(pdf_file_path))
