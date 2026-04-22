@@ -19,8 +19,6 @@ async def _call_delete_pages_api(
     doc_name: str,
     page_numbers: str,
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> bytes:
     """POST DeletePages; return raw PDF bytes (200 body or 202 + poll)."""
     payload = {
@@ -60,7 +58,6 @@ async def _poll_delete_pages_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -92,8 +89,8 @@ def _bytes_from_response(resp: httpx.Response) -> bytes:
     description=(
         "Remove pages from a PDF using the PDF4me DeletePages API. "
         "Provide the local PDF path and pageNumbers (e.g. '2', '1,3,5', or '2-4'). "
-        "Optionally set use_async (default true), output directory, and output file name. "
-        "When use_async is true, the API may return 202 and the tool polls until the PDF is ready."
+        "Optionally set output directory and output file name. "
+        " "
     ),
 )
 async def delete_pdf_pages_http(
@@ -107,9 +104,6 @@ async def delete_pdf_pages_http(
     Args:
         file_path: Local path to the PDF file.
         page_numbers: Pages to delete, as accepted by the API (e.g. '2', '1,3,5', '2-4').
-        use_async: When True, request async processing and poll the Location URL on 202.
-        output_dir: Directory for the output PDF. Defaults to the input file's directory.
-        output_file_name: Output filename. Defaults to deleted_pages_<input_filename>.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -141,7 +135,6 @@ async def delete_pdf_pages_http(
             doc_name,
             page_numbers.strip(),
             PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

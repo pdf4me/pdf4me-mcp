@@ -42,7 +42,6 @@ async def _call_read_barcodes_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     barcode_type: list[str],
     pages: str,
 ) -> Any:
@@ -107,7 +106,6 @@ async def _poll_read_barcodes_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> Any:

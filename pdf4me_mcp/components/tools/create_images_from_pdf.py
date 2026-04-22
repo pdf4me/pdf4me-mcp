@@ -104,7 +104,6 @@ async def _poll_create_images_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> list[tuple[str, str]]:
@@ -126,11 +125,9 @@ async def _call_create_images_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     width_pixel: str,
     image_extension: str,
     page_nrs: str,
-    use_async: bool,
 ) -> list[tuple[str, str]]:
     image_action: dict[str, Any] = {
         "WidthPixel": width_pixel,
@@ -145,7 +142,7 @@ async def _call_create_images_api(
         "docname": doc_name,
         "pageNrs": page_nrs.strip(),
         "imageAction": image_action,
-        "isasync": use_async,
+        "isAsync": True,
     }
 
     api_base_url = config.pdf4me_base_url.rstrip("/")
@@ -187,7 +184,7 @@ async def _call_create_images_api(
         "Render PDF pages to image files using the PDF4me CreateImages API (POST /api/v2/CreateImages). "
         "Controls width in pixels, image format (jpeg, png, tiff, etc.), and page selection (top-level pageNrs "
         "plus imageAction.PageSelection.PageNrs when the expression parses to integers; use 'all' for all pages). "
-        "When use_async is true, sends isasync true; the API may return 202 and the tool polls until images are ready. "
+        " "
         "Writes one file per page to output_dir (defaults to the input PDF directory)."
     ),
 )
@@ -206,8 +203,6 @@ async def create_images_from_pdf_http(
             sent as imageAction.PageSelection.PageNrs. 'all' sends pageNrs only (no PageSelection block).
         width_pixel: Output image width in pixels (passed as string to imageAction.WidthPixel).
         image_extension: Output format: jpg, jpeg, bmp, gif, png, tif, tiff, etc. (imageAction.ImageExtension).
-        use_async: When True, sends isasync true and polls on 202 until complete.
-        output_dir: Directory for image files. Defaults to the input file's directory.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -236,7 +231,6 @@ async def create_images_from_pdf_http(
             width_pixel=width_pixel,
             image_extension=image_extension,
             page_nrs=page_number.strip(),
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

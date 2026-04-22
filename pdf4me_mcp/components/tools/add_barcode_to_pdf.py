@@ -92,7 +92,6 @@ def _barcode_payload(
     display_text: Optional[Literal["above", "below"]],
     show_only_in_print: Optional[bool],
     is_text_above: Optional[bool],
-    use_async: bool,
 ) -> dict:
     payload: dict = {
         "docName": doc_name,
@@ -166,7 +165,6 @@ async def _poll_add_barcode_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -264,7 +262,6 @@ async def add_barcode_to_pdf(
         display_text=display_text,
         show_only_in_print=show_only_in_print,
         is_text_above=is_text_above,
-        use_async=use_async,
     )
 
     try:

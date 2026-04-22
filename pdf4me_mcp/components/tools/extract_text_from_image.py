@@ -95,7 +95,6 @@ async def _poll_image_extract_text_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> Any:
@@ -117,8 +116,6 @@ async def _call_image_extract_text_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> Any:
     payload: dict[str, Any] = {
         "docName": doc_name,
@@ -176,8 +173,6 @@ async def extract_text_from_image_http(
 
     Args:
         file_path: Local path to the image file (e.g. JPG, PNG, TIFF, WEBP).
-        use_async: When True, sends isAsync: true and polls the Location URL on 202
-            (50 attempts, 10s between polls, delay before each poll).
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() not in _ALLOWED_IMAGE_EXT:
@@ -201,7 +196,6 @@ async def extract_text_from_image_http(
             doc_content_base64,
             doc_name,
             PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

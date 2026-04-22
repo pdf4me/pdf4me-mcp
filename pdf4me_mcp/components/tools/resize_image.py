@@ -38,13 +38,11 @@ async def _call_resize_image_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     image_resize_type: Literal["Percentage", "Specific"],
     resize_percentage: str,
     width: int,
     height: int,
     maintain_aspect_ratio: bool,
-    use_async: bool,
 ) -> bytes:
     """POST ResizeImage; return image bytes (200 body or 202 + poll)."""
     sv = _schema_query_for_resize(image_resize_type)
@@ -90,7 +88,6 @@ async def _poll_resize_image_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -136,9 +133,6 @@ async def resize_image_http(
         width: Target width in pixels when using Specific mode.
         height: Target height in pixels when using Specific mode.
         maintain_aspect_ratio: Passed through to the API.
-        use_async: When True, request async processing and poll the Location URL on 202.
-        output_dir: Directory for the output image. Defaults to the input file directory.
-        output_file_name: Output filename. Defaults to resized_<input_basename>.
     """
     doc_content_base64, ext = file_to_base64(file_path)
     if ext.lower() not in _ALLOWED_IMAGE_EXT:
@@ -169,7 +163,6 @@ async def resize_image_http(
             width=width,
             height=height,
             maintain_aspect_ratio=maintain_aspect_ratio,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

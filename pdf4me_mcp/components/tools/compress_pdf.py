@@ -76,8 +76,6 @@ async def _call_compress_api(
     doc_name: str,
     optimize_profile: str,
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> bytes:
     api_base_url = config.pdf4me_base_url.rstrip("/")
     url = f"{api_base_url}/api/v2/Optimize"
@@ -111,7 +109,6 @@ async def _poll_compress_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -162,7 +159,6 @@ async def compress_pdf_http(
     try:
         pdf_bytes = await _call_compress_api(
             doc_content_base64, doc_name, optimize_profile, PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

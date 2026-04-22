@@ -82,7 +82,6 @@ def _build_payload(
     margin_right: Optional[float],
     margin_top: Optional[float],
     margin_bottom: Optional[float],
-    use_async: bool,
 ) -> dict:
     payload: dict = {
         "docName": doc_name,
@@ -139,7 +138,6 @@ async def _poll_add_html_header_footer_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -210,7 +208,6 @@ async def add_html_header_footer_to_pdf(
         margin_right=margin_right,
         margin_top=margin_top,
         margin_bottom=margin_bottom,
-        use_async=use_async,
     )
 
     resolved_output_dir = (

@@ -34,10 +34,8 @@ async def _call_convert_image_format_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     current_image_format: Literal["BMP", "GIF", "JPG", "PNG", "TIFF"],
     new_image_format: Literal["BMP", "GIF", "JPG", "PNG", "TIFF"],
-    use_async: bool,
 ) -> bytes:
     """POST ConvertImageFormat; return image bytes (200 body or 202 + poll)."""
     payload = {
@@ -79,7 +77,6 @@ async def _poll_convert_image_format_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -119,10 +116,6 @@ async def convert_image_format_http(
         file_path: Local path to the source image.
         current_image_format: Source image format (BMP, GIF, JPG, PNG, TIFF).
         new_image_format: Target image format (BMP, GIF, JPG, PNG, TIFF).
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the converted image. Defaults to input file directory.
-        output_file_name: Name for the output file. Defaults to converted_<input_basename><new_ext>.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     allowed_extensions = {".bmp", ".gif",
@@ -160,7 +153,6 @@ async def convert_image_format_http(
             PDF4ME_API_KEY,
             current_image_format=current_image_format,
             new_image_format=new_image_format,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

@@ -40,9 +40,7 @@ async def _call_image_metadata_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     image_type: Literal["JPG", "PNG"],
-    use_async: bool,
 ) -> dict[str, Any]:
     """Call GetImageMetadata and return metadata JSON (sync or async polling)."""
     payload = {
@@ -83,7 +81,6 @@ async def _poll_image_metadata_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> dict[str, Any]:
@@ -106,7 +103,7 @@ async def _poll_image_metadata_job(
     description=(
         "Extract metadata from a local image using the PDF4me GetImageMetadata API. "
         "Provide the file path to a JPG or PNG image. "
-        "Supports both sync and async processing via use_async. "
+        " "
         "Returns structured metadata JSON including image properties and available EXIF details."
     ),
 )
@@ -119,8 +116,6 @@ async def get_image_metadata_http(
     Args:
         file_path: Local path to the image file.
         image_type: Declared image type for the API payload ("JPG" or "PNG").
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
     """
     doc_content_base64, extension = file_to_base64(file_path)
     allowed_extensions = {".jpg", ".jpeg", ".png"}
@@ -143,7 +138,6 @@ async def get_image_metadata_http(
             doc_name,
             PDF4ME_API_KEY,
             image_type=image_type,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

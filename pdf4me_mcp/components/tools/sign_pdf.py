@@ -38,7 +38,6 @@ async def _call_sign_pdf_api(
     image_file_base64: str,
     image_name: str,
     PDF4ME_API_KEY: str,
-    *,
     pages: str,
     align_x: str,
     align_y: str,
@@ -53,7 +52,6 @@ async def _call_sign_pdf_api(
     opacity: str,
     show_only_in_print: bool,
     is_background: bool,
-    use_async: bool,
 ) -> bytes:
     """POST SignPdf; return raw PDF bytes (handles 200 body or 202 + poll)."""
     payload = {
@@ -109,7 +107,6 @@ async def _poll_sign_pdf_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -134,7 +131,7 @@ async def _poll_sign_pdf_job(
         "Add a signature image to a PDF using the PDF4me SignPdf API. "
         "Provide paths to the PDF and signature image (e.g. JPG/PNG). "
         "Supports page ranges, alignment, size, margins, opacity, and async 202 polling. "
-        "Default use_async is false to avoid MCP client request timeouts on large payloads; set true if needed. "
+        " "
         "Optional output directory and file name; saves the signed PDF to disk."
     ),
 )
@@ -171,9 +168,6 @@ async def sign_pdf_http(
         opacity: Opacity 0–100 as a string.
         show_only_in_print: Maps to showOnlyInPrint.
         is_background: Maps to isBackground.
-        use_async: When True, request async processing and poll the Location URL on 202.
-        output_dir: Directory for the signed PDF. Defaults to the PDF's directory.
-        output_file_name: Output filename. Defaults to signed_<input_pdf_basename>.pdf.
     """
     pdf_b64, pdf_ext = file_to_base64(file_path)
     if pdf_ext.lower() != ".pdf":
@@ -223,7 +217,6 @@ async def sign_pdf_http(
             opacity=_str_field(opacity),
             show_only_in_print=show_only_in_print,
             is_background=is_background,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

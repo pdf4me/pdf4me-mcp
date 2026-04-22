@@ -81,7 +81,6 @@ async def _poll_find_and_replace_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -102,8 +101,6 @@ async def _poll_find_and_replace_job(
 async def _call_find_and_replace_api(
     payload: dict[str, Any],
     pdf4me_api_key: str,
-    *,
-    is_async: bool,
 ) -> bytes:
     api_base_url = config.pdf4me_base_url.rstrip("/")
     url = f"{api_base_url}/api/v2/FindAndReplace"
@@ -115,9 +112,6 @@ async def _call_find_and_replace_api(
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(url, json=payload, headers=headers)
         if resp.status_code == 202:
-            if not is_async:
-                raise ValueError(
-                    "API returned 202 Accepted while async mode was disabled.")
             location = resp.headers.get("Location")
             if not location:
                 raise ValueError(
@@ -140,7 +134,7 @@ async def _call_find_and_replace_api(
     title="Find And Replace Text",
     description=(
         "Find and replace text in a PDF via PDF4me /api/v2/FindAndReplace. "
-        "Inputs: pdf_file_path, old_text, new_text, page_sequence; optional async and output path."
+        "Inputs: pdf_file_path, old_text, new_text, page_sequence; optional output path."
     ),
 )
 async def find_and_replace_text(
@@ -181,7 +175,7 @@ async def find_and_replace_text(
         "newText": new_text,
         "pageSequence": page_sequence.strip(),
     }
-    payload["async"] = True
+    payload["isAsync"] = True
 
     resolved_output_dir = (
         output_dir if output_dir else os.path.dirname(
@@ -193,7 +187,7 @@ async def find_and_replace_text(
 
     try:
         pdf_bytes = await _call_find_and_replace_api(
-            payload, pdf4me_api_key, is_async=is_async
+            payload, pdf4me_api_key
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

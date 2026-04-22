@@ -82,12 +82,10 @@ async def _call_convert_pdf_to_powerpoint_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     quality_type: str,
     language: str,
     ocr_when_needed: bool,
     merge_all_sheets: bool,
-    use_async: bool,
 ) -> bytes:
     """POST ConvertPdfToPowerPoint; return raw PPTX bytes (200 or 202 + poll)."""
     payload = {
@@ -133,7 +131,6 @@ async def _poll_convert_pdf_to_powerpoint_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -156,8 +153,8 @@ async def _poll_convert_pdf_to_powerpoint_job(
     description=(
         "Convert a local PDF file to PowerPoint (PPTX) using the PDF4me ConvertPdfToPowerPoint API. "
         "Provide the file path to the PDF. "
-        "Options: quality (Draft/High), language, OCR when needed, merge_all_sheets, use_async, and optional output path. "
-        "When use_async is true, the API may return 202 and the tool polls until the PPTX is ready. "
+        " Options: quality (Draft/High), language, OCR when needed, merge_all_sheets, and optional output path. "
+        " "
         "Output is always PPTX."
     ),
 )
@@ -178,10 +175,6 @@ async def convert_pdf_to_powerpoint_http(
         language: Document language hint for OCR/extraction.
         ocr_when_needed: Enable OCR when the API determines it is needed.
         merge_all_sheets: Merge content into a single presentation when supported.
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the PPTX. Defaults to the same directory as the input file.
-        output_file_name: Name for the output file. Defaults from the PDF name (e.g. doc.pdf -> doc.pptx).
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -209,7 +202,6 @@ async def convert_pdf_to_powerpoint_http(
             language=language,
             ocr_when_needed=ocr_when_needed,
             merge_all_sheets=merge_all_sheets,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

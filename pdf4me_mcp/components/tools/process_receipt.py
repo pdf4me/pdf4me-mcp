@@ -66,7 +66,6 @@ def _merged_custom_field_keys(
 
 def _resolve_receipt_doc_name(
     user_doc_name: Optional[str],
-    *,
     has_path: bool,
     path: Optional[str],
     content_for_api: str,
@@ -139,7 +138,6 @@ async def _poll_process_receipt_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> httpx.Response:

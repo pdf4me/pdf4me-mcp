@@ -75,7 +75,6 @@ async def _poll_add_page_number_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -100,7 +99,6 @@ async def _call_add_page_number_api(
     align_x: str,
     align_y: str,
     PDF4ME_API_KEY: str,
-    *,
     margin_x_in_mm: Optional[int],
     margin_y_in_mm: Optional[int],
     font_size: Optional[int],

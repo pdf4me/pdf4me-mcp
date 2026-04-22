@@ -31,7 +31,6 @@ async def _call_convert_visio_to_pdf_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     is_pdf_compliant: bool,
     page_index: int,
     page_count: int,
@@ -39,7 +38,6 @@ async def _call_convert_visio_to_pdf_api(
     save_foreground_page: bool,
     save_tool_bar: bool,
     auto_fit: bool,
-    use_async: bool,
 ) -> bytes:
     """POST ConvertVisio; return raw PDF bytes (200 body or 202 + poll)."""
     payload = {
@@ -86,7 +84,6 @@ async def _poll_convert_visio_to_pdf_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -136,10 +133,6 @@ async def convert_visio_to_pdf_http(
         save_foreground_page: Keep foreground page content.
         save_tool_bar: Include toolbar content.
         auto_fit: Auto-fit content to page.
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the PDF. Defaults to the same directory as the input file.
-        output_file_name: Name for the output PDF. Defaults to <input_basename>.pdf.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     ext = extension.lower()
@@ -175,7 +168,6 @@ async def convert_visio_to_pdf_http(
             save_foreground_page=save_foreground_page,
             save_tool_bar=save_tool_bar,
             auto_fit=auto_fit,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

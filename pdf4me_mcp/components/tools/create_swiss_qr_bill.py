@@ -73,7 +73,6 @@ def _coerce_enum(
     cls: type[_E],
     raw: Any,
     field_label: str,
-    *,
     optional: bool,
 ) -> tuple[Optional[_E], Optional[ToolResult]]:
     """Validate JSON/MCP string inputs against backend enum values."""
@@ -115,7 +114,6 @@ def _strip_opt(s: Optional[str]) -> Optional[str]:
 
 
 def _build_payload(
-    *,
     doc_content: str,
     document_name: str,
     iban: str,
@@ -223,7 +221,6 @@ async def _poll_create_swiss_qr_bill_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> tuple[bytes, Optional[str], Optional[str]]:
@@ -366,7 +363,7 @@ async def create_swiss_qr_bill_http(
         ud_street_or_address_line2=ud_street_or_address_line2,
         unstructured_message=unstructured_message,
     )
-    payload["isAsync"] = use_async
+    payload["isAsync"] = True
 
     resolved_output_dir = output_dir
     if not resolved_output_dir:

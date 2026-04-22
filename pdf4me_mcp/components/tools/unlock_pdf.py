@@ -18,9 +18,7 @@ async def _call_unlock_pdf_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     password: str,
-    use_async: bool,
 ) -> bytes:
     """POST to Unlock; return raw PDF bytes (handles 200 body or 202 + poll)."""
     payload = {
@@ -60,7 +58,6 @@ async def _poll_unlock_pdf_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -93,7 +90,7 @@ def _bytes_from_response(resp: httpx.Response) -> bytes:
         "Remove password protection from a local PDF using the PDF4me Unlock API. "
         "Provide the file path and the current open password. "
         "Optionally specify output directory and file name. "
-        "When use_async is true, the API may return 202 and the tool polls until the PDF is ready."
+        " "
     ),
 )
 async def unlock_pdf_http(
@@ -107,10 +104,6 @@ async def unlock_pdf_http(
     Args:
         file_path: Local path to the protected PDF file.
         password: Current open password for the PDF (required).
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the unlocked file. Defaults to the same directory as the input file.
-        output_file_name: Name for the output file. Defaults to <basename>.unlocked.pdf (insert before .pdf).
     """
     if not password:
         return ToolResult(content="password is required and must not be empty.")
@@ -140,7 +133,6 @@ async def unlock_pdf_http(
             resolved_output_name,
             PDF4ME_API_KEY,
             password=password,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

@@ -69,8 +69,6 @@ async def _call_create_barcode_api(
     barcode_type: str,
     hide_text: bool,
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> bytes:
     api_base_url = config.pdf4me_base_url.rstrip("/")
     url = f"{api_base_url}/api/v2/CreateBarcode"
@@ -108,7 +106,6 @@ async def _poll_create_barcode_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -156,7 +153,6 @@ async def create_barcode(
             barcode_type=barcode_type,
             hide_text=hide_text,
             PDF4ME_API_KEY=PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

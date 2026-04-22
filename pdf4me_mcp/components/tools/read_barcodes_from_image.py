@@ -71,9 +71,7 @@ async def _call_read_barcodes_from_image_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     image_type: _ImageType,
-    use_async: bool,
 ) -> Any:
     """Call ReadBarcodesfromImage and return parsed barcode JSON data."""
     payload = {
@@ -115,7 +113,6 @@ async def _poll_read_barcodes_from_image_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> Any:
@@ -139,7 +136,7 @@ async def _poll_read_barcodes_from_image_job(
     description=(
         "Read barcodes and QR codes from a local image using the PDF4me ReadBarcodesfromImage API. "
         "Provide the image path and optionally image type (JPG, PNG, GIF, BMP, TIFF, WEBP). "
-        "Supports both sync and async processing via use_async (payload key isAsync). "
+        " (payload key isAsync). "
         "Returns structured barcode data as JSON."
     ),
 )
@@ -152,7 +149,6 @@ async def read_barcodes_from_image_http(
     Args:
         file_path: Local path to the image file.
         image_type: Image type passed to API payload. If omitted, inferred from extension (unknown defaults to JPG).
-        use_async: When True, send isAsync and poll the Location URL on 202 (10 attempts, 10s between polls).
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() not in _ALLOWED_IMAGE_EXT:
@@ -180,7 +176,6 @@ async def read_barcodes_from_image_http(
             doc_name,
             PDF4ME_API_KEY,
             image_type=resolved_image_type,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

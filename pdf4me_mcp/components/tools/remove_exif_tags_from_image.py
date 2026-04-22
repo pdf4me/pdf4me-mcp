@@ -49,9 +49,7 @@ async def _call_remove_exif_tags_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     image_type: _ImageType,
-    use_async: bool,
 ) -> bytes:
     """POST RemoveEXIFTagsFromImage; return image bytes (200 body or 202 + poll)."""
     payload = {
@@ -93,7 +91,6 @@ async def _poll_remove_exif_tags_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -133,8 +130,6 @@ async def remove_exif_tags_from_image_http(
     Args:
         file_path: Local path to the source image.
         image_type: Payload image type ("JPG" or "PNG"). If omitted, inferred from file extension.
-        use_async: When True, request async processing and poll the Location URL on 202.
-        output_dir: Directory for the output image. Defaults to the input file directory.
     """
     resolved_output_name = output_file_name.strip()
     if not resolved_output_name:
@@ -167,7 +162,6 @@ async def remove_exif_tags_from_image_http(
             doc_name,
             PDF4ME_API_KEY,
             image_type=resolved_image_type,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

@@ -18,8 +18,6 @@ async def _call_flatten_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> bytes:
     """POST to FlattenPdf; return raw PDF bytes (handles 200 body or 202 + poll)."""
     payload = {
@@ -58,7 +56,6 @@ async def _poll_flatten_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -91,7 +88,7 @@ def _bytes_from_response(resp: httpx.Response) -> bytes:
         "Flatten a PDF file with the PDF4me API: forms, annotations, and layers become static content. "
         "Provide the local file path to the PDF. "
         "Optionally specify an output directory and output file name. "
-        "When use_async is true, the API may return 202 and the tool polls until the PDF is ready."
+        " "
     ),
 )
 async def flatten_pdf_http(
@@ -103,10 +100,6 @@ async def flatten_pdf_http(
 
     Args:
         file_path: Local path to the PDF file to flatten.
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the flattened file. Defaults to the same directory as the input file.
-        output_file_name: Name for the output file. Defaults to flattened_<input_filename>.pdf.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -128,7 +121,6 @@ async def flatten_pdf_http(
             doc_content_base64,
             doc_name,
             PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

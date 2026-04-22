@@ -29,11 +29,9 @@ async def _call_rotate_image_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     background_color: str,
     proportionate_resize: bool,
     rotation_angle: int,
-    use_async: bool,
 ) -> bytes:
     """POST RotateImage; return image bytes (200 body or 202 + poll)."""
     payload = {
@@ -76,7 +74,6 @@ async def _poll_rotate_image_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -118,9 +115,6 @@ async def rotate_image_http(
         rotation_angle: Rotation in degrees (integer, e.g. 90).
         background_color: Fill color behind rotated bounds (e.g. #FFFFFF). Sent as API key Backgroundcolor.
         proportionate_resize: Whether to keep proportions during rotation (API ProportionateResize).
-        use_async: When True, request async processing and poll the Location URL on 202.
-        output_dir: Directory for the output image. Defaults to the input file directory.
-        output_file_name: Output filename. Defaults to rotated_<input_basename>.
     """
     doc_content_base64, ext = file_to_base64(file_path)
     if ext.lower() not in _ALLOWED_IMAGE_EXT:
@@ -148,7 +142,6 @@ async def rotate_image_http(
             background_color=background_color.strip() or "#FFFFFF",
             proportionate_resize=proportionate_resize,
             rotation_angle=rotation_angle,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

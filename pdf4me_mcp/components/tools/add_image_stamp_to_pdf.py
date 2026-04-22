@@ -90,7 +90,6 @@ def _build_payload(
     opacity: Optional[int],
     is_background: Optional[bool],
     show_only_in_print: Optional[bool],
-    use_async: bool,
 ) -> dict:
     payload: dict = {
         "docName": doc_name,
@@ -161,7 +160,6 @@ async def _poll_image_stamp_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -255,7 +253,6 @@ async def add_image_stamp_to_pdf(
         opacity=opacity,
         is_background=is_background,
         show_only_in_print=show_only_in_print,
-        use_async=use_async,
     )
 
     resolved_output_dir = (

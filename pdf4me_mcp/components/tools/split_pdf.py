@@ -97,7 +97,6 @@ async def _poll_split_pdf_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> httpx.Response:

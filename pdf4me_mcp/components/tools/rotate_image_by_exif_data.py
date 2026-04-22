@@ -29,8 +29,6 @@ async def _call_rotate_image_by_exif_data_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> bytes:
     """POST RotateImageByExifData; return image bytes (200 body or 202 + poll)."""
     payload = {
@@ -71,7 +69,6 @@ async def _poll_rotate_image_by_exif_data_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -108,8 +105,6 @@ async def rotate_image_by_exif_data_http(
     Args:
         file_path: Local path to the source image.
         output_dir: Directory for the output image (required).
-        use_async: When True, sends async and polls the Location URL on 202.
-        output_file_name: Output filename. Defaults to exif_rotated_<input_basename>.
     """
     doc_content_base64, ext = file_to_base64(file_path)
     if ext.lower() not in _ALLOWED_IMAGE_EXT:
@@ -139,7 +134,6 @@ async def rotate_image_by_exif_data_http(
             doc_content_base64,
             doc_name,
             PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

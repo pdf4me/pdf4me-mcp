@@ -63,7 +63,6 @@ async def _poll_extract_text_from_word_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> httpx.Response:
@@ -85,8 +84,6 @@ async def _poll_extract_text_from_word_job(
 async def _call_extract_text_from_word_api(
     payload: dict[str, Any],
     pdf4me_api_key: str,
-    *,
-    is_async: bool,
 ) -> httpx.Response:
     api_base_url = config.pdf4me_base_url.rstrip("/")
     url = f"{api_base_url}/api/v2/ExtractTextFromWord"
@@ -98,9 +95,6 @@ async def _call_extract_text_from_word_api(
     async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(url, json=payload, headers=headers)
         if resp.status_code == 202:
-            if not is_async:
-                raise ValueError(
-                    "API returned 202 Accepted while async mode was disabled.")
             location = resp.headers.get("Location")
             if not location:
                 raise ValueError(
@@ -179,7 +173,7 @@ async def extract_text_from_word(
         "RemoveHeaderFooter": remove_header_footer,
         "AcceptChanges": accept_changes,
     }
-    payload["async"] = True
+    payload["isAsync"] = True
 
     resolved_out = output_dir if output_dir else _default_output_dir(
         word_file_path)
@@ -187,7 +181,7 @@ async def extract_text_from_word(
 
     try:
         final_resp = await _call_extract_text_from_word_api(
-            payload, pdf4me_api_key, is_async=is_async
+            payload, pdf4me_api_key
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

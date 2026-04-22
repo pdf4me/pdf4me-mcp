@@ -18,10 +18,8 @@ async def _call_protect_pdf_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     password: str,
     pdf_permission: str,
-    use_async: bool,
 ) -> bytes:
     """POST to Protect; return raw PDF bytes (handles 200 body or 202 + poll)."""
     payload = {
@@ -62,7 +60,6 @@ async def _poll_protect_pdf_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -95,7 +92,7 @@ def _bytes_from_response(resp: httpx.Response) -> bytes:
         "Password-protect a local PDF using the PDF4me Protect API. "
         "Provide the file path, open password, and pdf_permission (for example All). "
         "Optionally specify output directory and file name. "
-        "When use_async is true, the API may return 202 and the tool polls until the PDF is ready."
+        " "
     ),
 )
 async def protect_pdf_http(
@@ -111,10 +108,6 @@ async def protect_pdf_http(
         file_path: Local path to the PDF file to protect.
         password: Open password for the protected PDF (required).
         pdf_permission: PDF permission profile string (for example All); matches API pdfPermission.
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the protected file. Defaults to the same directory as the input file.
-        output_file_name: Name for the output file. Defaults to <basename>.protected.pdf.
     """
     if not password:
         return ToolResult(content="password is required and must not be empty.")
@@ -145,7 +138,6 @@ async def protect_pdf_http(
             PDF4ME_API_KEY,
             password=password,
             pdf_permission=pdf_permission,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

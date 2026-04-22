@@ -31,12 +31,10 @@ async def _call_replace_text_with_image_api(
     doc_content_base64: str,
     image_content_base64: str,
     PDF4ME_API_KEY: str,
-    *,
     replace_text: str,
     page_sequence: str,
     image_height: int,
     image_width: int,
-    use_async: bool,
 ) -> bytes:
     """POST ReplaceTextWithImage; return raw PDF bytes (200 body or 202 + poll)."""
     payload = {
@@ -80,7 +78,6 @@ async def _poll_replace_text_with_image_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -129,9 +126,6 @@ async def replace_text_with_image_http(
         page_sequence: Pages to search (e.g. \"all\", \"1\", \"1,3,5\", \"2-5\").
         image_height: Display height of the placed image in pixels (API integer).
         image_width: Display width of the placed image in pixels (API integer).
-        use_async: When True, request async processing and poll the Location URL on 202.
-        output_dir: Directory for the output PDF. Defaults to the input PDF's directory.
-        output_file_name: Output filename (required).
     """
     pdf_b64, pdf_ext = file_to_base64(file_path)
     if pdf_ext.lower() != ".pdf":
@@ -175,7 +169,6 @@ async def replace_text_with_image_http(
             page_sequence=page_sequence.strip() or "all",
             image_height=image_height,
             image_width=image_width,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

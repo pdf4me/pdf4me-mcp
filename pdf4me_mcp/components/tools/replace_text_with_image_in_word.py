@@ -80,11 +80,9 @@ async def _call_replace_text_with_image_in_word_api(
     image_content_base64: str,
     image_file_name: str,
     PDF4ME_API_KEY: str,
-    *,
     search_text: str,
     page_numbers: str,
     is_first_page_skip: bool,
-    use_async: bool,
 ) -> bytes:
     """POST ReplaceTextWithImageInWord; return raw DOCX bytes (200 body or 202 + poll)."""
     payload = {
@@ -128,7 +126,6 @@ async def _poll_replace_text_with_image_in_word_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -175,9 +172,6 @@ async def replace_text_with_image_in_word_http(
         search_text: Placeholder text in the document to replace (e.g. SIGN_HERE).
         page_numbers: Pages to process, as accepted by the API (e.g. \"1\", \"1,2\").
         is_first_page_skip: Maps to IsFirstPageSkip.
-        use_async: When True, sends isAsync and polls the Location URL on 202.
-        output_dir: Directory for the output file. Required (no default directory is used).
-        output_file_name: Output filename. Defaults to replace_text_image_word_<basename>.docx.
     """
     word_b64, word_ext = file_to_base64(word_file_path)
     if word_ext.lower() not in _ALLOWED_WORD_EXT:
@@ -229,7 +223,6 @@ async def replace_text_with_image_in_word_http(
             search_text=search_text.strip(),
             page_numbers=page_numbers.strip() or "1",
             is_first_page_skip=is_first_page_skip,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

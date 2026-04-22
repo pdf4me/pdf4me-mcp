@@ -111,7 +111,6 @@ async def _poll_generate_document_multiple_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> list[bytes]:
@@ -164,7 +163,6 @@ async def generate_documents_multiple_http(
         document_data_file_path: Local file read as base64 for documentDataFile.
         file_meta_data: Optional fileMetaData string.
         meta_data_json: Optional metaDataJson string.
-        use_async: When True, request async processing and poll on HTTP 202.
     """
     if not output_dir.strip():
         return ToolResult(content="output_dir is required. Please provide an output directory path.")
@@ -218,7 +216,7 @@ async def generate_documents_multiple_http(
         "templateFileData": template_file_data,
         "documentDataType": document_data_type.strip(),
         "outputType": output_type.strip(),
-        "async": True,
+        "isAsync": True,
     }
     if document_data_text is not None:
         payload["documentDataText"] = document_data_text

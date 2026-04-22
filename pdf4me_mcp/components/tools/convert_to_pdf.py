@@ -26,8 +26,6 @@ async def _call_convert_to_pdf_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> bytes:
     """POST ConvertToPdf; return raw PDF bytes (200 body or 202 + poll)."""
     payload = {
@@ -66,7 +64,6 @@ async def _poll_convert_to_pdf_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -90,8 +87,7 @@ async def _poll_convert_to_pdf_job(
     description=(
         "Convert a local document file (for example DOCX, PPTX, XLSX, images, or text formats) "
         "to PDF using the PDF4me ConvertToPdf API. "
-        "Provide the local file path. Supports sync and async processing via use_async, "
-        "plus optional output directory and output file name."
+        "Provide the local file path, plus optional output directory and output file name."
     ),
 )
 async def convert_to_pdf_http(
@@ -103,10 +99,6 @@ async def convert_to_pdf_http(
 
     Args:
         file_path: Local path to the input document file.
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the PDF. Defaults to the same directory as the input file.
-        output_file_name: Name for the output PDF. Defaults to <input_basename>.pdf.
     """
     doc_content_base64, _ = file_to_base64(file_path)
     input_name = os.path.basename(file_path)
@@ -130,7 +122,6 @@ async def convert_to_pdf_http(
             doc_content_base64,
             input_name,
             PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

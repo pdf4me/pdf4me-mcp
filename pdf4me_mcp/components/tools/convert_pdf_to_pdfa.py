@@ -29,11 +29,9 @@ async def _call_pdf_a_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     compliance: str,
     allow_upgrade: bool,
     allow_downgrade: bool,
-    use_async: bool,
 ) -> bytes:
     """POST to PdfA; return raw PDF bytes (200 body or 202 + poll)."""
     payload = {
@@ -75,7 +73,6 @@ async def _poll_pdf_a_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -107,7 +104,7 @@ def _bytes_from_response(resp: httpx.Response) -> bytes:
         "Convert a PDF file to PDF/A (archival ISO format) using the PDF4me PdfA API. "
         "Provide the local file path to the PDF. "
         "Choose compliance (e.g. PdfA1b), allow_upgrade / allow_downgrade, and optional output path. "
-        "When use_async is true, the API may return 202 and the tool polls until the PDF is ready."
+        " "
     ),
 )
 async def convert_pdf_to_pdfa_http(
@@ -125,10 +122,6 @@ async def convert_pdf_to_pdfa_http(
         compliance: PDF/A level (PdfA1b is common for basic conformance).
         allow_upgrade: Allow upgrading to higher compliance when supported by the API.
         allow_downgrade: Allow downgrading to lower compliance when supported by the API.
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the PDF/A file. Defaults to the same directory as the input file.
-        output_file_name: Name for the output file. Defaults to pdfa_<input_filename>.pdf.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -153,7 +146,6 @@ async def convert_pdf_to_pdfa_http(
             compliance=compliance,
             allow_upgrade=allow_upgrade,
             allow_downgrade=allow_downgrade,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

@@ -88,7 +88,6 @@ async def _poll_merge_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -110,8 +109,6 @@ async def _poll_merge_job(
 async def _call_merge_api(
     payload: dict[str, Any],
     pdf4me_api_key: str,
-    *,
-    use_async: bool,
 ) -> tuple[bytes, Optional[str]]:
     api_base_url = config.pdf4me_base_url.rstrip("/")
     url = f"{api_base_url}/api/v2/Merge"
@@ -123,7 +120,7 @@ async def _call_merge_api(
     async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(url, json=payload, headers=headers)
         if resp.status_code == 202:
-            if not use_async:
+            if False:
                 raise ValueError(
                     "API returned 202 Accepted while async mode was disabled.")
             location = resp.headers.get("Location")
@@ -149,7 +146,7 @@ async def _call_merge_api(
     title="Merge Multiple PDFs",
     description=(
         "Merge multiple PDF files into one via PDF4me /api/v2/Merge. "
-        "Inputs: pdf_file_paths (list of local PDFs), optional request_doc_name, async mode, and output path."
+        " Inputs: pdf_file_paths (list of local PDFs), optional request_doc_name, and output path."
     ),
 )
 async def merge_multiple_pdfs(
@@ -189,8 +186,7 @@ async def merge_multiple_pdfs(
         "docContent": docs_b64,
         "docName": doc_name,
     }
-    if use_async:
-        payload["isAsync"] = True
+    payload["isAsync"] = True
 
     first_input_abs = os.path.abspath(pdf_file_paths[0])
     resolved_output_dir = (
@@ -199,7 +195,7 @@ async def merge_multiple_pdfs(
 
     try:
         pdf_bytes, api_file_name = await _call_merge_api(
-            payload, pdf4me_api_key, use_async=use_async
+            payload, pdf4me_api_key
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

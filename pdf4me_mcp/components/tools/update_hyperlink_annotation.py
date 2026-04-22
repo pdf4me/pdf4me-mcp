@@ -28,9 +28,7 @@ async def _call_update_hyperlink_annotation_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     updates: list[dict[str, Any]],
-    use_async: bool,
 ) -> bytes:
     """POST UpdateHyperlinkAnnotation; return raw PDF bytes (200 body or 202 + poll)."""
     payload = {
@@ -71,7 +69,6 @@ async def _poll_update_hyperlink_annotation_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -126,9 +123,6 @@ async def update_hyperlink_annotation_http(
         text_new_value: New display text.
         url_current_value: Existing hyperlink URL to replace.
         url_new_value: New hyperlink URL destination.
-        use_async: When True, sends isAsync and polls the Location URL on 202.
-        output_dir: Directory for the output PDF (required).
-        output_file_name: Output filename (required).
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -186,7 +180,6 @@ async def update_hyperlink_annotation_http(
             doc_name,
             PDF4ME_API_KEY,
             updates=updatehyperlinkannotationlist,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

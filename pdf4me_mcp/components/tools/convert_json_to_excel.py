@@ -82,7 +82,6 @@ async def _call_convert_json_to_excel_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     worksheet_name: str,
     is_title_wrap_text: bool,
     is_title_bold: bool,
@@ -92,7 +91,6 @@ async def _call_convert_json_to_excel_api(
     ignore_null_values: bool,
     first_row: int,
     first_column: int,
-    use_async: bool,
 ) -> bytes:
     """POST ConvertJsonToExcel; return raw XLSX bytes (200 or 202 + poll)."""
     payload = {
@@ -142,7 +140,6 @@ async def _poll_convert_json_to_excel_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -166,8 +163,8 @@ async def _poll_convert_json_to_excel_job(
         "Convert a local JSON file to Excel (XLSX) using the PDF4me ConvertJsonToExcel API. "
         "Provide the file path to UTF-8 JSON. "
         "Options: worksheet_name, title formatting, number/date conversion and formats, "
-        "ignore_null_values, first_row/first_column (1-based), use_async, and optional output path. "
-        "When use_async is true, the API may return 202 and the tool polls until the XLSX is ready."
+        "ignore_null_values, first_row/first_column (1-based), and optional output path. "
+        " "
     ),
 )
 async def convert_json_to_excel_http(
@@ -197,10 +194,6 @@ async def convert_json_to_excel_http(
         ignore_null_values: Skip null values when building the sheet.
         first_row: First data row (1-based).
         first_column: First data column (1-based).
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the XLSX. Defaults to the same directory as the input file.
-        output_file_name: Name for the output file. Defaults from the input name (e.g. data.json → data.xlsx).
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".json":
@@ -240,7 +233,6 @@ async def convert_json_to_excel_http(
             ignore_null_values=ignore_null_values,
             first_row=first_row,
             first_column=first_column,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

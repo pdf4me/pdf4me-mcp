@@ -40,8 +40,6 @@ async def _call_read_swiss_qr_bill_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> Any:
     """Call ReadSwissQRBill and return parsed Swiss QR data JSON."""
     payload = {
@@ -82,7 +80,6 @@ async def _poll_read_swiss_qr_bill_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> Any:
@@ -106,7 +103,7 @@ async def _poll_read_swiss_qr_bill_job(
     description=(
         "Read Swiss QR bill data from a local PDF using the PDF4me ReadSwissQRBill API. "
         "Provide the file path to the PDF. "
-        "Supports both sync and async processing via use_async. "
+        " "
         "Returns structured Swiss QR data as JSON."
     ),
 )
@@ -117,8 +114,6 @@ async def read_swiss_qr_bill_http(
 
     Args:
         file_path: Local path to the PDF file.
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -137,7 +132,6 @@ async def read_swiss_qr_bill_http(
             doc_content_base64,
             doc_name,
             PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

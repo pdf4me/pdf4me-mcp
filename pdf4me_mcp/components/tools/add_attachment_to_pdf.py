@@ -76,8 +76,6 @@ async def _call_add_attachment_to_pdf_api(
     doc_content_base64: str,
     attachments: list[dict[str, str]],
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> bytes:
     api_base_url = config.pdf4me_base_url.rstrip("/")
     url = f"{api_base_url}/api/v2/AddAttachmentToPdf"
@@ -115,7 +113,6 @@ async def _poll_add_attachment_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -196,7 +193,6 @@ async def add_attachment_to_pdf(
             doc_content_base64=pdf_b64,
             attachments=attachments,
             PDF4ME_API_KEY=PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

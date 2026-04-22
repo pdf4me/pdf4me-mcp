@@ -43,7 +43,6 @@ def _sanitize_profiles(profiles: Optional[str]) -> Optional[str]:
 
 def _resolve_shipping_label_doc_name(
     user_doc_name: Optional[str],
-    *,
     has_path: bool,
     path: Optional[str],
     content_for_api: str,
@@ -118,7 +117,6 @@ async def _poll_process_shipping_label_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> httpx.Response:

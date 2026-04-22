@@ -106,7 +106,6 @@ async def _poll_process_mortgage_document_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> httpx.Response:

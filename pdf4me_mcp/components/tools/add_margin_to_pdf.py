@@ -74,7 +74,6 @@ async def _poll_add_margin_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -96,7 +95,6 @@ async def _call_add_margin_api(
     doc_name: str,
     doc_content_base64: str,
     PDF4ME_API_KEY: str,
-    *,
     margin_left: Optional[int],
     margin_right: Optional[int],
     margin_top: Optional[int],

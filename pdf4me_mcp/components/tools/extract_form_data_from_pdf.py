@@ -50,7 +50,6 @@ async def _poll_extract_form_data_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> httpx.Response:
@@ -71,8 +70,6 @@ async def _poll_extract_form_data_job(
 async def _call_extract_form_data_api(
     payload: dict[str, Any],
     pdf4me_api_key: str,
-    *,
-    is_async: bool,
 ) -> dict[str, Any]:
     api_base_url = config.pdf4me_base_url.rstrip("/")
     url = f"{api_base_url}/api/v2/ExtractPdfFormData"
@@ -83,10 +80,6 @@ async def _call_extract_form_data_api(
     async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(url, json=payload, headers=headers)
         if resp.status_code == 202:
-            if not is_async:
-                raise ValueError(
-                    "API returned 202 Accepted while async mode was disabled."
-                )
             location = resp.headers.get("Location")
             if not location:
                 raise ValueError(
@@ -115,7 +108,7 @@ def _default_output_dir(pdf_file_path: str) -> str:
     title="Extract Form Data From PDF",
     description=(
         "Extract all PDF form fields and values via PDF4me /api/v2/ExtractPdfFormData. "
-        "Input is pdf_file_path; optional request_doc_name, is_async, and output_dir. "
+        "Input is pdf_file_path; optional request_doc_name and output_dir. "
         "Saves extracted_form_data.json with the full API response."
     ),
 )
@@ -146,7 +139,7 @@ async def extract_form_data_from_pdf(
         "docContent": pdf_b64,
         "docName": doc_name,
     }
-    payload["async"] = True
+    payload["isAsync"] = True
 
     resolved_out = output_dir if output_dir else _default_output_dir(
         pdf_file_path)
@@ -154,7 +147,7 @@ async def extract_form_data_from_pdf(
 
     try:
         result = await _call_extract_form_data_api(
-            payload, pdf4me_api_key, is_async=is_async
+            payload, pdf4me_api_key
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

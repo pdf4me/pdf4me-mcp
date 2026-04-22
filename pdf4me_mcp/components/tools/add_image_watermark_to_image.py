@@ -76,7 +76,6 @@ def _build_payload(
     position_x: Optional[float],
     position_y: Optional[float],
     rotation: Optional[float],
-    use_async: bool,
 ) -> dict:
     payload: dict = {
         "docName": doc_name,
@@ -135,7 +134,6 @@ async def _poll_add_image_watermark_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -221,7 +219,6 @@ async def add_image_watermark_to_image(
         position_x=position_x,
         position_y=position_y,
         rotation=rotation,
-        use_async=use_async,
     )
 
     resolved_output_dir = (

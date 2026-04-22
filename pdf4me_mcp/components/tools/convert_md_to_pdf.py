@@ -36,8 +36,6 @@ async def _call_convert_md_to_pdf_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
 ) -> bytes:
     """POST ConvertMdToPdf; return raw PDF bytes (200 body or 202 + poll)."""
     payload = {
@@ -78,7 +76,6 @@ async def _poll_convert_md_to_pdf_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -103,7 +100,7 @@ async def _poll_convert_md_to_pdf_job(
         "Convert a local Markdown file (.md) to PDF using the PDF4me ConvertMdToPdf API. "
         "Provide the file path to the Markdown file and output_dir where the PDF will be saved. "
         "Long HTTP timeouts on requests. "
-        "When use_async is true, the API may return 202; the tool polls the Location URL until "
+        " "
         "complete. Optional output file name (defaults to <input_basename>.pdf)."
     ),
 )
@@ -117,9 +114,6 @@ async def convert_md_to_pdf_http(
     Args:
         file_path: Local path to the Markdown file (.md).
         output_dir: Directory to save the PDF (required).
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_file_name: Name for the output PDF. Defaults to <input_basename>.pdf.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".md":
@@ -151,7 +145,6 @@ async def convert_md_to_pdf_http(
             doc_content_base64,
             doc_name,
             PDF4ME_API_KEY,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

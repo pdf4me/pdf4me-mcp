@@ -34,9 +34,7 @@ async def _call_fill_pdf_form_api(
     template_doc_content_base64: str,
     template_doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     form_data: dict[str, Any],
-    use_async: bool,
 ) -> bytes:
     """POST to FillPdfForm; return raw PDF bytes (handles 200 body or 202 + poll)."""
     payload = {
@@ -81,7 +79,6 @@ async def _poll_fill_pdf_form_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -106,7 +103,7 @@ async def _poll_fill_pdf_form_job(
         "Fill form fields in a local PDF using the PDF4me FillPdfForm API. "
         "Provide the local PDF path and a JSON object of field/value pairs in form_data. "
         "Optionally specify output directory and output file name. "
-        "When use_async is true, the API may return 202 and the tool polls until the PDF is ready."
+        " "
     ),
 )
 async def fill_pdf_form_http(
@@ -120,10 +117,6 @@ async def fill_pdf_form_http(
     Args:
         file_path: Local path to the template PDF file to fill.
         form_data: Form field values as key/value pairs (for example {"firstname": "John"}).
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the filled PDF. Defaults to the same directory as input file.
-        output_file_name: Name for the output file. Defaults to filled_<input_filename>.pdf.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -150,7 +143,6 @@ async def fill_pdf_form_http(
             doc_name,
             PDF4ME_API_KEY,
             form_data=form_data,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

@@ -30,7 +30,6 @@ _ASYNC_POLL_INTERVAL_SEC = 10.0
 async def _call_convert_url_to_pdf_api(
     web_url: str,
     PDF4ME_API_KEY: str,
-    *,
     auth_type: str,
     username: str,
     password: str,
@@ -43,7 +42,6 @@ async def _call_convert_url_to_pdf_api(
     bottom_margin: str,
     print_background: bool,
     display_header_footer: bool,
-    use_async: bool,
 ) -> bytes:
     """POST ConvertUrlToPdf; return raw PDF bytes (200 or 202 + poll)."""
     payload = {
@@ -94,7 +92,6 @@ async def _poll_convert_url_to_pdf_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -126,7 +123,7 @@ def _bytes_from_response(resp: httpx.Response) -> bytes:
         "Required input is only web_url (https://...); no local file path is read. "
         "Optional: layout, page format, margins, scale, print background, auth (NoAuth or credentials), "
         "output_dir/output_file_name for where to save the PDF (default file name output.pdf). "
-        "When use_async is true, the API may return 202 and the tool polls until the PDF is ready."
+        " "
     ),
 )
 async def convert_url_to_pdf_http(
@@ -179,10 +176,6 @@ async def convert_url_to_pdf_http(
         top_margin, left_margin, right_margin, bottom_margin: CSS-like margin strings (e.g. 20px).
         print_background: Include backgrounds in the PDF.
         display_header_footer: Print browser header/footer region if supported.
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Optional directory to save the PDF. Defaults to the current working directory.
-        output_file_name: Optional name for the saved PDF. Defaults to output.pdf.
     """
     resolved_output_dir = _resolve_save_directory(output_dir)
     name_raw = (
@@ -216,7 +209,6 @@ async def convert_url_to_pdf_http(
             bottom_margin=bottom_margin,
             print_background=print_background,
             display_header_footer=display_header_footer,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

@@ -18,12 +18,10 @@ async def _call_rotate_page_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     rotation_type: Literal[
         "NoRotation", "Clockwise", "CounterClockwise", "UpsideDown"
     ],
     page: str,
-    use_async: bool,
 ) -> bytes:
     """POST RotatePage; return raw PDF bytes (handles 200 body or 202 + poll)."""
     payload = {
@@ -65,7 +63,6 @@ async def _poll_rotate_page_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -98,7 +95,7 @@ def _bytes_from_response(resp: httpx.Response) -> bytes:
         "Rotate selected pages of a PDF using the PDF4me RotatePage API. "
         "Provide the PDF path, page spec (e.g. \"1\", \"1,3,5\", \"2-4\"), and rotationType. "
         "Optional output directory and file name. "
-        "When use_async is true, the API may return 202 and the tool polls until the PDF is ready."
+        " "
     ),
 )
 async def rotate_pdf_page_http(
@@ -116,10 +113,6 @@ async def rotate_pdf_page_http(
         file_path: Local path to the PDF file.
         page: Pages to rotate (e.g. \"1\", \"1,3,5\", \"2-4\").
         rotation_type: Rotation per API (NoRotation, Clockwise, CounterClockwise, UpsideDown).
-        use_async: When True, request async processing and poll the Location URL on 202
-            using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the output. Defaults to the same directory as the input file.
-        output_file_name: Name for the output file. Defaults to rotated_pages_<input_filename>.pdf.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -151,7 +144,6 @@ async def rotate_pdf_page_http(
             PDF4ME_API_KEY,
             rotation_type=rotation_type,
             page=page_spec,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

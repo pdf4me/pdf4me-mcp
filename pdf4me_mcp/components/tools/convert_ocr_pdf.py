@@ -26,11 +26,9 @@ async def _call_convert_ocr_pdf_api(
     doc_content_base64: str,
     doc_name: str,
     PDF4ME_API_KEY: str,
-    *,
     quality_type: Literal["Draft", "High"],
     ocr_when_needed: bool,
     language: str,
-    use_async: bool,
 ) -> bytes:
     """POST ConvertOcrPdf; return raw PDF bytes (200 body or 202 + poll)."""
     payload = {
@@ -74,7 +72,6 @@ async def _poll_convert_ocr_pdf_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -127,9 +124,6 @@ async def convert_ocr_pdf_http(
         quality_type: Draft or High.
         ocr_when_needed: When true, skip OCR if text is already searchable (sent as \"true\"/\"false\").
         language: OCR language code (e.g. eng). Empty defaults to eng.
-        use_async: When True, send async/isAsync and poll on 202 (can exceed MCP host timeouts).
-        output_dir: Directory for the output PDF. Defaults to the input file's directory.
-        output_file_name: Output filename. Defaults to editable_<input_filename>.pdf.
     """
     doc_content_base64, extension = file_to_base64(file_path)
     if extension.lower() != ".pdf":
@@ -158,7 +152,6 @@ async def convert_ocr_pdf_http(
             quality_type=quality_type,
             ocr_when_needed=ocr_when_needed,
             language=language,
-            use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:

@@ -104,7 +104,6 @@ async def _poll_generate_document_single_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> bytes:
@@ -158,7 +157,6 @@ async def generate_document_single_http(
         document_data_file_path: Local data file path to send as base64 documentDataFile.
         file_meta_data: Optional fileMetaData string.
         meta_data_json: Optional metaDataJson string.
-        use_async: When True, sends isasync true and polls on 202.
     """
     if not output_dir.strip():
         return ToolResult(content="output_dir is required. Please provide an output directory path.")
@@ -215,7 +213,7 @@ async def generate_document_single_http(
         "documentDataType": document_data_type.strip().lower(),
         "outputType": output_type.strip().lower(),
         "metaDataJson": mj if mj else "{}",
-        "isasync": use_async,
+        "isAsync": True,
     }
     if document_data_text is not None:
         payload["documentDataText"] = document_data_text

@@ -98,7 +98,6 @@ async def _poll_extract_pages_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> tuple[bytes, Optional[str]]:
@@ -153,7 +152,7 @@ async def _call_extract_pages_api(
     description=(
         "Extract selected pages from a PDF via PDF4me /api/v2/Extract. "
         "Inputs: pdf_file_path and page_numbers (e.g. '1,3,5' or '1-5,10'). "
-        "Optional request_doc_name, is_async, and output path settings."
+        "Optional request_doc_name and output path settings."
     ),
 )
 async def extract_pages_from_pdf(
@@ -188,9 +187,8 @@ async def extract_pages_from_pdf(
         "docContent": pdf_b64,
         "docName": doc_name,
         "pageNumbers": page_numbers.strip(),
+        "isAsync": True,
     }
-    if is_async:
-        payload["isAsync"] = True
 
     resolved_output_dir = (
         output_dir if output_dir else os.path.dirname(

@@ -66,7 +66,6 @@ def _merged_field_names(
 
 def _input_doc_name_universal(
     user_doc_name: Optional[str],
-    *,
     has_path: bool,
     path: Optional[str],
     content_for_api: str,
@@ -85,7 +84,6 @@ def _input_doc_name_universal(
 
 def _resolve_universal_doc_name(
     user_doc_name: Optional[str],
-    *,
     has_path: bool,
     path: Optional[str],
     content_for_api: str,
@@ -158,7 +156,6 @@ async def _poll_process_universal_document_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
-    *,
     max_attempts: int,
     interval_sec: float,
 ) -> httpx.Response:
