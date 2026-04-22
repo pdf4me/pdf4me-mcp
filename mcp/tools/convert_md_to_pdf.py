@@ -43,7 +43,7 @@ async def _call_convert_md_to_pdf_api(
         "docContent": doc_content_base64,
         "docName": doc_name,
         "mdFilePath": "",
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -108,7 +108,6 @@ async def _poll_convert_md_to_pdf_job(
 async def convert_md_to_pdf_http(
     file_path: str,
     output_dir: str,
-    use_async: bool = True,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
     """Convert Markdown to PDF via PDF4me ConvertMdToPdf.
