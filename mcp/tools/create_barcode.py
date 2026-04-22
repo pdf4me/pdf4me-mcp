@@ -2,7 +2,7 @@ import asyncio
 import base64
 import json
 import os
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -10,7 +10,7 @@ from fastmcp.tools.function_tool import tool
 from fastmcp.tools import ToolResult
 
 from config import config
-from helper import file_to_base64, resolve_polling_url, write_file_from_bytes
+from helper import resolve_polling_url, write_file_from_bytes
 
 _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
@@ -25,7 +25,7 @@ def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
 def _docdata_b64_from_json(obj: Any, *, depth: int = 0) -> Optional[str]:
     if depth > 12 or not isinstance(obj, dict):
         return None
-    for dk in ("docContent", "DocContent", "docData", "DocData"):
+    for dk in ("File Content", "fileContent", "docContent", "DocContent", "docData", "DocData"):
         v = obj.get(dk)
         if isinstance(v, str) and v:
             return v
@@ -38,16 +38,12 @@ def _docdata_b64_from_json(obj: Any, *, depth: int = 0) -> Optional[str]:
     return None
 
 
-def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
+def _bytes_from_image_response(resp: httpx.Response) -> bytes:
     ct = (resp.headers.get("content-type") or "").lower()
     raw = resp.content
 
-    if "application/pdf" in ct or "application/octet-stream" in ct:
+    if any(t in ct for t in ("image/", "application/octet-stream")):
         return raw
-
-    body = _strip_utf8_bom_and_leading_ws(raw)
-    if body.startswith(b"%PDF"):
-        return body
 
     trimmed = _strip_utf8_bom_and_leading_ws(raw)
     if trimmed.startswith((b"{", b"[")):
@@ -55,36 +51,38 @@ def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
             payload = json.loads(trimmed.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError(f"Invalid JSON in response: {exc}") from exc
-        if not isinstance(payload, dict):
-            raise ValueError("Expected JSON object with docContent")
-        b64 = _docdata_b64_from_json(payload)
-        if not b64:
-            raise ValueError("Response JSON has no docContent/DocData base64 field")
-        return base64.b64decode(b64)
+        if isinstance(payload, dict):
+            b64 = _docdata_b64_from_json(payload)
+            if b64:
+                return base64.b64decode(b64)
 
     if raw:
         return raw
 
     raise ValueError(
-        f"Expected PDF binary or JSON with docContent, got content-type {ct!r}"
+        f"Expected image binary or JSON with base64, got content-type {ct!r}"
     )
 
 
-async def _call_compress_api(
-    doc_content_base64: str,
-    doc_name: str,
-    optimize_profile: str,
+async def _call_create_barcode_api(
+    text: str,
+    barcode_type: str,
+    hide_text: bool,
     PDF4ME_API_KEY: str,
     *,
     use_async: bool,
 ) -> bytes:
     api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/Optimize"
+    url = f"{api_base_url}/api/v2/CreateBarcode"
     payload = {
-        "docContent": doc_content_base64,
-        "docName": doc_name,
-        "optimizeProfile": optimize_profile,
+        "text": text,
+        "barcodeType": barcode_type,
+        "hideText": hide_text,
         "isAsync": True,
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {PDF4ME_API_KEY}",
     }
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(url, json=payload, headers=headers)
@@ -95,7 +93,7 @@ async def _call_compress_api(
                     "API returned 202 Accepted but no Location header for polling"
                 )
             poll_url = resolve_polling_url(api_base_url, location)
-            return await _poll_compress_job(
+            return await _poll_create_barcode_job(
                 client,
                 poll_url,
                 headers,
@@ -103,10 +101,10 @@ async def _call_compress_api(
                 interval_sec=_ASYNC_POLL_INTERVAL_SEC,
             )
         resp.raise_for_status()
-        return _bytes_from_pdf_response(resp)
+        return _bytes_from_image_response(resp)
 
 
-async def _poll_compress_job(
+async def _poll_create_barcode_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
@@ -119,49 +117,46 @@ async def _poll_compress_job(
             await asyncio.sleep(interval_sec)
         poll = await client.get(location_url, headers=headers)
         if poll.status_code == 200:
-            return _bytes_from_pdf_response(poll)
+            return _bytes_from_image_response(poll)
         if poll.status_code == 202:
             continue
         poll.raise_for_status()
     raise TimeoutError(
-        f"Optimize did not finish after {max_attempts} polls ({interval_sec}s apart)"
+        f"CreateBarcode did not finish after {max_attempts} polls ({interval_sec}s apart)"
     )
 
 
 @tool(
-    name="compress_pdf",
+    name="create_barcode",
     description=(
-        "Compress a PDF file using the PDF4me API to reduce file size. "
-        "Provide the local file path to the PDF. "
-        "Choose an optimization profile: Web (fast download), Print (high-quality), or Screen (screen viewing). "
-        "Optionally specify an output directory and output file name."
+        "Create a standalone barcode or QR code image (PNG) using the PDF4me Create Barcode API. "
+        "Pass the text to encode and barcodeType (e.g. qrCode, code128, dataMatrix, ean13, upcA). "
+        "hideText hides the human-readable label. Saves the file and returns the path."
     ),
 )
-async def compress_pdf_http(
-    file_path: str,
-    optimize_profile: Literal["Web", "Print", "Screen"] = "Web",
+async def create_barcode(
+    text: str,
+    barcode_type: str = "qrCode",
+    hide_text: bool = False,
     use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
-    doc_content_base64, extension = file_to_base64(file_path)
-    if extension.lower() != ".pdf":
-        return ToolResult(content=f"Input file must be a PDF, got '{extension}' instead.")
-
-    doc_name = os.path.basename(file_path)
-    resolved_output_dir = output_dir if output_dir else os.path.dirname(
-        os.path.abspath(file_path))
-    resolved_output_name = output_file_name if output_file_name else f"compressed_{doc_name}"
-
     PDF4ME_API_KEY = config.api_key
     if not PDF4ME_API_KEY:
         return ToolResult(
             content="Authentication failed: no API key provided in the request."
         )
 
+    resolved_output_dir = output_dir if output_dir else os.getcwd()
+    resolved_output_name = output_file_name if output_file_name else "barcode.png"
+
     try:
-        pdf_bytes = await _call_compress_api(
-            doc_content_base64, doc_name, optimize_profile, PDF4ME_API_KEY,
+        image_bytes = await _call_create_barcode_api(
+            text=text,
+            barcode_type=barcode_type,
+            hide_text=hide_text,
+            PDF4ME_API_KEY=PDF4ME_API_KEY,
             use_async=use_async,
         )
     except httpx.HTTPStatusError as exc:
@@ -177,14 +172,12 @@ async def compress_pdf_http(
     except (ValueError, TimeoutError) as exc:
         return ToolResult(content=str(exc))
 
-    if not pdf_bytes:
-        return ToolResult(
-            content="Unexpected API response — no document content returned."
-        )
+    if not image_bytes:
+        return ToolResult(content="Unexpected API response — no image data returned.")
 
     try:
         output_path = write_file_from_bytes(
-            pdf_bytes, resolved_output_dir, resolved_output_name
+            image_bytes, resolved_output_dir, resolved_output_name
         )
     except OSError as exc:
         return ToolResult(
@@ -192,6 +185,9 @@ async def compress_pdf_http(
         )
 
     return ToolResult(
-        content=f"PDF compressed successfully. Saved to {output_path}",
-        structured_content={"output_path": output_path},
+        content=f"Barcode image created successfully. Saved to {output_path}",
+        structured_content={
+            "output_path": output_path,
+            "barcode_type": barcode_type,
+        },
     )

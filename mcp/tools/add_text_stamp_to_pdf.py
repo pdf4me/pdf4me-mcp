@@ -49,10 +49,9 @@ def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
     if body.startswith(b"%PDF"):
         return body
 
-    trimmed = _strip_utf8_bom_and_leading_ws(raw)
-    if trimmed.startswith((b"{", b"[")):
+    if body.startswith((b"{", b"[")):
         try:
-            payload = json.loads(trimmed.decode("utf-8"))
+            payload = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError(f"Invalid JSON in response: {exc}") from exc
         if not isinstance(payload, dict):
@@ -70,43 +69,7 @@ def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
     )
 
 
-async def _call_compress_api(
-    doc_content_base64: str,
-    doc_name: str,
-    optimize_profile: str,
-    PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
-) -> bytes:
-    api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/Optimize"
-    payload = {
-        "docContent": doc_content_base64,
-        "docName": doc_name,
-        "optimizeProfile": optimize_profile,
-        "isAsync": True,
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        if resp.status_code == 202:
-            location = resp.headers.get("Location")
-            if not location:
-                raise ValueError(
-                    "API returned 202 Accepted but no Location header for polling"
-                )
-            poll_url = resolve_polling_url(api_base_url, location)
-            return await _poll_compress_job(
-                client,
-                poll_url,
-                headers,
-                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
-                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
-            )
-        resp.raise_for_status()
-        return _bytes_from_pdf_response(resp)
-
-
-async def _poll_compress_job(
+async def _poll_stamp_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
@@ -124,35 +87,71 @@ async def _poll_compress_job(
             continue
         poll.raise_for_status()
     raise TimeoutError(
-        f"Optimize did not finish after {max_attempts} polls ({interval_sec}s apart)"
+        f"Stamp did not finish after {max_attempts} polls ({interval_sec}s apart)"
     )
 
 
+async def _call_stamp_api(payload: dict[str, Any], PDF4ME_API_KEY: str) -> bytes:
+    api_base_url = config.pdf4me_base_url.rstrip("/")
+    url = f"{api_base_url}/api/v2/Stamp"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {PDF4ME_API_KEY}",
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        if resp.status_code == 202:
+            location = resp.headers.get("Location")
+            if not location:
+                raise ValueError(
+                    "API returned 202 Accepted but no Location header for polling"
+                )
+            poll_url = resolve_polling_url(api_base_url, location)
+            return await _poll_stamp_job(
+                client,
+                poll_url,
+                headers,
+                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
+                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
+            )
+        resp.raise_for_status()
+        return _bytes_from_pdf_response(resp)
+
+
 @tool(
-    name="compress_pdf",
+    name="add_text_stamp_to_pdf",
     description=(
-        "Compress a PDF file using the PDF4me API to reduce file size. "
-        "Provide the local file path to the PDF. "
-        "Choose an optimization profile: Web (fast download), Print (high-quality), or Screen (screen viewing). "
-        "Optionally specify an output directory and output file name."
+        "Add a text stamp or watermark to a PDF using PDF4me Text Stamp (/api/v2/Stamp). "
+        "Provide pdf_file_path, stamp text, pages (e.g. all, 1, 1-3), alignX/alignY, font and margin settings. "
+        "Uses API field isItalics (italic). Saves the stamped PDF to disk."
     ),
 )
-async def compress_pdf_http(
-    file_path: str,
-    optimize_profile: Literal["Web", "Print", "Screen"] = "Web",
-    use_async: bool = True,
+async def add_text_stamp_to_pdf(
+    pdf_file_path: str,
+    text: str,
+    pages: str = "all",
+    align_x: Literal["left", "center", "right"] = "center",
+    align_y: Literal["top", "middle", "bottom"] = "middle",
+    margin_x_in_mm: str = "10",
+    margin_y_in_mm: str = "10",
+    margin_x_in_px: str = "0",
+    margin_y_in_px: str = "0",
+    opacity: str = "50",
+    font_name: str = "Arial",
+    font_size: int = 12,
+    font_color: str = "#000000",
+    is_bold: bool = False,
+    is_italics: bool = False,
+    underline: bool = False,
+    rotate: int = 0,
+    is_background: bool = True,
+    show_only_in_print: bool = False,
+    transverse: bool = False,
+    fit_text_over_page: bool = False,
+    request_doc_name: Optional[str] = None,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
-    doc_content_base64, extension = file_to_base64(file_path)
-    if extension.lower() != ".pdf":
-        return ToolResult(content=f"Input file must be a PDF, got '{extension}' instead.")
-
-    doc_name = os.path.basename(file_path)
-    resolved_output_dir = output_dir if output_dir else os.path.dirname(
-        os.path.abspath(file_path))
-    resolved_output_name = output_file_name if output_file_name else f"compressed_{doc_name}"
-
     PDF4ME_API_KEY = config.api_key
     if not PDF4ME_API_KEY:
         return ToolResult(
@@ -160,10 +159,54 @@ async def compress_pdf_http(
         )
 
     try:
-        pdf_bytes = await _call_compress_api(
-            doc_content_base64, doc_name, optimize_profile, PDF4ME_API_KEY,
-            use_async=use_async,
+        pdf_b64, pdf_ext = file_to_base64(pdf_file_path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read PDF file: {exc}")
+
+    if pdf_ext.lower() != ".pdf":
+        return ToolResult(
+            content=f"Source file must be a PDF, got '{pdf_ext}' instead."
         )
+
+    doc_name = request_doc_name or os.path.basename(pdf_file_path)
+    if not doc_name.lower().endswith(".pdf"):
+        doc_name = f"{doc_name}.pdf"
+
+    payload: dict[str, Any] = {
+        "docContent": pdf_b64,
+        "docName": doc_name,
+        "pages": pages,
+        "text": text,
+        "alignX": align_x,
+        "alignY": align_y,
+        "marginXInMM": margin_x_in_mm,
+        "marginYInMM": margin_y_in_mm,
+        "marginXInPx": margin_x_in_px,
+        "marginYInPx": margin_y_in_px,
+        "opacity": opacity,
+        "fontName": font_name,
+        "fontSize": font_size,
+        "fontColor": font_color,
+        "isBold": is_bold,
+        "isItalics": is_italics,
+        "underline": underline,
+        "rotate": rotate,
+        "isBackground": is_background,
+        "showOnlyInPrint": show_only_in_print,
+        "transverse": transverse,
+        "fitTextOverPage": fit_text_over_page,
+        "isAsync": True,
+    }
+
+    resolved_output_dir = (
+        output_dir if output_dir else os.path.dirname(os.path.abspath(pdf_file_path))
+    )
+    resolved_output_name = (
+        output_file_name if output_file_name else f"text_stamp_{doc_name}"
+    )
+
+    try:
+        pdf_bytes = await _call_stamp_api(payload, PDF4ME_API_KEY)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:
             return ToolResult(
@@ -178,9 +221,7 @@ async def compress_pdf_http(
         return ToolResult(content=str(exc))
 
     if not pdf_bytes:
-        return ToolResult(
-            content="Unexpected API response — no document content returned."
-        )
+        return ToolResult(content="Unexpected API response — no PDF content returned.")
 
     try:
         output_path = write_file_from_bytes(
@@ -192,6 +233,10 @@ async def compress_pdf_http(
         )
 
     return ToolResult(
-        content=f"PDF compressed successfully. Saved to {output_path}",
-        structured_content={"output_path": output_path},
+        content=f"PDF with text stamp saved successfully to {output_path}",
+        structured_content={
+            "output_path": output_path,
+            "doc_name": doc_name,
+            "pages": pages,
+        },
     )

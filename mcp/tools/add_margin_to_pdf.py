@@ -2,7 +2,7 @@ import asyncio
 import base64
 import json
 import os
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -49,10 +49,9 @@ def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
     if body.startswith(b"%PDF"):
         return body
 
-    trimmed = _strip_utf8_bom_and_leading_ws(raw)
-    if trimmed.startswith((b"{", b"[")):
+    if body.startswith((b"{", b"[")):
         try:
-            payload = json.loads(trimmed.decode("utf-8"))
+            payload = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError(f"Invalid JSON in response: {exc}") from exc
         if not isinstance(payload, dict):
@@ -70,43 +69,7 @@ def _bytes_from_pdf_response(resp: httpx.Response) -> bytes:
     )
 
 
-async def _call_compress_api(
-    doc_content_base64: str,
-    doc_name: str,
-    optimize_profile: str,
-    PDF4ME_API_KEY: str,
-    *,
-    use_async: bool,
-) -> bytes:
-    api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/Optimize"
-    payload = {
-        "docContent": doc_content_base64,
-        "docName": doc_name,
-        "optimizeProfile": optimize_profile,
-        "isAsync": True,
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        if resp.status_code == 202:
-            location = resp.headers.get("Location")
-            if not location:
-                raise ValueError(
-                    "API returned 202 Accepted but no Location header for polling"
-                )
-            poll_url = resolve_polling_url(api_base_url, location)
-            return await _poll_compress_job(
-                client,
-                poll_url,
-                headers,
-                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
-                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
-            )
-        resp.raise_for_status()
-        return _bytes_from_pdf_response(resp)
-
-
-async def _poll_compress_job(
+async def _poll_add_margin_job(
     client: httpx.AsyncClient,
     location_url: str,
     headers: dict[str, str],
@@ -124,35 +87,79 @@ async def _poll_compress_job(
             continue
         poll.raise_for_status()
     raise TimeoutError(
-        f"Optimize did not finish after {max_attempts} polls ({interval_sec}s apart)"
+        f"AddMargin did not finish after {max_attempts} polls ({interval_sec}s apart)"
     )
 
 
+async def _call_add_margin_api(
+    doc_name: str,
+    doc_content_base64: str,
+    PDF4ME_API_KEY: str,
+    *,
+    margin_left: Optional[int],
+    margin_right: Optional[int],
+    margin_top: Optional[int],
+    margin_bottom: Optional[int],
+) -> bytes:
+    api_base_url = config.pdf4me_base_url.rstrip("/")
+    url = f"{api_base_url}/api/v2/AddMargin"
+    payload: dict[str, Any] = {
+        "docName": doc_name,
+        "docContent": doc_content_base64,
+        "isAsync": True,
+    }
+    if margin_left is not None:
+        payload["marginLeft"] = margin_left
+    if margin_right is not None:
+        payload["marginRight"] = margin_right
+    if margin_top is not None:
+        payload["marginTop"] = margin_top
+    if margin_bottom is not None:
+        payload["marginBottom"] = margin_bottom
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {PDF4ME_API_KEY}",
+    }
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        if resp.status_code == 202:
+            location = resp.headers.get("Location")
+            if not location:
+                raise ValueError(
+                    "API returned 202 Accepted but no Location header for polling"
+                )
+            poll_url = resolve_polling_url(api_base_url, location)
+            return await _poll_add_margin_job(
+                client,
+                poll_url,
+                headers,
+                max_attempts=_ASYNC_POLL_MAX_ATTEMPTS,
+                interval_sec=_ASYNC_POLL_INTERVAL_SEC,
+            )
+        resp.raise_for_status()
+        return _bytes_from_pdf_response(resp)
+
+
 @tool(
-    name="compress_pdf",
+    name="add_margin_to_pdf",
     description=(
-        "Compress a PDF file using the PDF4me API to reduce file size. "
-        "Provide the local file path to the PDF. "
-        "Choose an optimization profile: Web (fast download), Print (high-quality), or Screen (screen viewing). "
-        "Optionally specify an output directory and output file name."
+        "Add margins to a PDF using the PDF4me AddMargin API. "
+        "Provide a local PDF path and optional margins in millimeters "
+        "(margin_left/right/top/bottom, 0-100). Saves the resulting PDF to disk."
     ),
 )
-async def compress_pdf_http(
-    file_path: str,
-    optimize_profile: Literal["Web", "Print", "Screen"] = "Web",
-    use_async: bool = True,
+async def add_margin_to_pdf(
+    pdf_file_path: str,
+    margin_left: Optional[int] = None,
+    margin_right: Optional[int] = None,
+    margin_top: Optional[int] = None,
+    margin_bottom: Optional[int] = None,
+    request_doc_name: Optional[str] = None,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
-    doc_content_base64, extension = file_to_base64(file_path)
-    if extension.lower() != ".pdf":
-        return ToolResult(content=f"Input file must be a PDF, got '{extension}' instead.")
-
-    doc_name = os.path.basename(file_path)
-    resolved_output_dir = output_dir if output_dir else os.path.dirname(
-        os.path.abspath(file_path))
-    resolved_output_name = output_file_name if output_file_name else f"compressed_{doc_name}"
-
     PDF4ME_API_KEY = config.api_key
     if not PDF4ME_API_KEY:
         return ToolResult(
@@ -160,9 +167,35 @@ async def compress_pdf_http(
         )
 
     try:
-        pdf_bytes = await _call_compress_api(
-            doc_content_base64, doc_name, optimize_profile, PDF4ME_API_KEY,
-            use_async=use_async,
+        pdf_b64, pdf_ext = file_to_base64(pdf_file_path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read PDF file: {exc}")
+
+    if pdf_ext.lower() != ".pdf":
+        return ToolResult(
+            content=f"Source file must be a PDF, got '{pdf_ext}' instead."
+        )
+
+    doc_name = request_doc_name or os.path.basename(pdf_file_path)
+    if not doc_name.lower().endswith(".pdf"):
+        doc_name = f"{doc_name}.pdf"
+
+    resolved_output_dir = (
+        output_dir if output_dir else os.path.dirname(os.path.abspath(pdf_file_path))
+    )
+    resolved_output_name = (
+        output_file_name if output_file_name else f"margin_{doc_name}"
+    )
+
+    try:
+        pdf_bytes = await _call_add_margin_api(
+            doc_name=doc_name,
+            doc_content_base64=pdf_b64,
+            PDF4ME_API_KEY=PDF4ME_API_KEY,
+            margin_left=margin_left,
+            margin_right=margin_right,
+            margin_top=margin_top,
+            margin_bottom=margin_bottom,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:
@@ -178,9 +211,7 @@ async def compress_pdf_http(
         return ToolResult(content=str(exc))
 
     if not pdf_bytes:
-        return ToolResult(
-            content="Unexpected API response — no document content returned."
-        )
+        return ToolResult(content="Unexpected API response — no PDF content returned.")
 
     try:
         output_path = write_file_from_bytes(
@@ -192,6 +223,15 @@ async def compress_pdf_http(
         )
 
     return ToolResult(
-        content=f"PDF compressed successfully. Saved to {output_path}",
-        structured_content={"output_path": output_path},
+        content=f"PDF with margins saved successfully to {output_path}",
+        structured_content={
+            "output_path": output_path,
+            "doc_name": doc_name,
+            "margins_mm": {
+                "left": margin_left,
+                "right": margin_right,
+                "top": margin_top,
+                "bottom": margin_bottom,
+            },
+        },
     )

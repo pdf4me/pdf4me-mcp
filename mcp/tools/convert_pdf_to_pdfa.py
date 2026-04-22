@@ -42,7 +42,7 @@ async def _call_pdf_a_api(
         "compliance": compliance,
         "allowUpgrade": allow_upgrade,
         "allowDowngrade": allow_downgrade,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {

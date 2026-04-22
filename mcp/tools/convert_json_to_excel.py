@@ -106,7 +106,7 @@ async def _call_convert_json_to_excel_api(
         "ignoreNullValues": ignore_null_values,
         "firstRow": first_row,
         "firstColumn": first_column,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
