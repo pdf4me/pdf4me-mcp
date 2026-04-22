@@ -138,7 +138,6 @@ async def create_barcode(
     text: str,
     barcode_type: str = "qrCode",
     hide_text: bool = False,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

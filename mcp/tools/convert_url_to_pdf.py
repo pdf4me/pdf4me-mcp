@@ -141,7 +141,6 @@ async def convert_url_to_pdf_http(
     bottom_margin: str = "20px",
     print_background: bool = True,
     display_header_footer: bool = False,
-    use_async: bool = True,
     output_dir: Annotated[
         Optional[str],
         Field(

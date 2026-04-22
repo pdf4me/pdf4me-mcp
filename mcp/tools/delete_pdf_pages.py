@@ -27,7 +27,7 @@ async def _call_delete_pages_api(
         "docContent": doc_content_base64,
         "docName": doc_name,
         "pageNumbers": page_numbers,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -98,7 +98,6 @@ def _bytes_from_response(resp: httpx.Response) -> bytes:
 async def delete_pdf_pages_http(
     file_path: str,
     page_numbers: str,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

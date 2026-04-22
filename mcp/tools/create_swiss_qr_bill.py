@@ -283,7 +283,6 @@ async def create_swiss_qr_bill_http(
     ud_street_or_address_line1: Optional[str] = None,
     ud_street_or_address_line2: Optional[str] = None,
     unstructured_message: Optional[str] = None,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

@@ -122,7 +122,6 @@ def _default_output_dir(pdf_file_path: str) -> str:
 async def extract_form_data_from_pdf(
     pdf_file_path: str,
     request_doc_name: Optional[str] = None,
-    is_async: bool = False,
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     pdf4me_api_key = config.api_key
@@ -147,8 +146,7 @@ async def extract_form_data_from_pdf(
         "docContent": pdf_b64,
         "docName": doc_name,
     }
-    if is_async:
-        payload["async"] = True
+    payload["async"] = True
 
     resolved_out = output_dir if output_dir else _default_output_dir(pdf_file_path)
     os.makedirs(resolved_out, exist_ok=True)
