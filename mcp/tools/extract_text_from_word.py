@@ -139,7 +139,6 @@ async def extract_text_from_word(
     remove_header_footer: bool = True,
     accept_changes: bool = True,
     request_doc_name: Optional[str] = None,
-    is_async: bool = False,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
@@ -179,8 +178,7 @@ async def extract_text_from_word(
         "RemoveHeaderFooter": remove_header_footer,
         "AcceptChanges": accept_changes,
     }
-    if is_async:
-        payload["async"] = True
+    payload["async"] = True
 
     resolved_out = output_dir if output_dir else _default_output_dir(word_file_path)
     os.makedirs(resolved_out, exist_ok=True)

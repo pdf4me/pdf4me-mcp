@@ -122,7 +122,7 @@ async def _call_image_extract_text_api(
     payload: dict[str, Any] = {
         "docName": doc_name,
         "docContent": doc_content_base64,
-        "isAsync": use_async,
+        "isAsync": True,
     }
 
     api_base_url = config.pdf4me_base_url.rstrip("/")
@@ -169,7 +169,6 @@ async def _call_image_extract_text_api(
 )
 async def extract_text_from_image_http(
     file_path: str,
-    use_async: bool = True,
 ) -> ToolResult:
     """Extract text from an image via PDF4me ImageExtractText.
 

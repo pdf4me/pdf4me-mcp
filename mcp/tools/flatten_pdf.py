@@ -95,7 +95,6 @@ def _bytes_from_response(resp: httpx.Response) -> bytes:
 )
 async def flatten_pdf_http(
     file_path: str,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

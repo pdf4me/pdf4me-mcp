@@ -193,7 +193,6 @@ async def create_images_from_pdf_http(
     page_number: str = "1",
     width_pixel: str = "800",
     image_extension: str = "jpeg",
-    use_async: bool = True,
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     """Convert PDF pages to images via PDF4me CreateImages.

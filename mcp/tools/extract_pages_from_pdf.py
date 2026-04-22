@@ -159,7 +159,6 @@ async def extract_pages_from_pdf(
     pdf_file_path: str,
     page_numbers: str = "1",
     request_doc_name: Optional[str] = None,
-    is_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
