@@ -29,7 +29,7 @@ async def _call_protect_pdf_api(
         "docContent": doc_content_base64,
         "password": password,
         "pdfPermission": pdf_permission,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -102,7 +102,6 @@ async def protect_pdf_http(
     file_path: str,
     password: str,
     pdf_permission: str = "All",
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

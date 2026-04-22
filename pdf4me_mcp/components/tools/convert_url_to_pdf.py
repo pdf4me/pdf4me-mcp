@@ -61,7 +61,7 @@ async def _call_convert_url_to_pdf_api(
         "bottomMargin": bottom_margin,
         "printBackground": print_background,
         "displayHeaderFooter": display_header_footer,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -143,7 +143,6 @@ async def convert_url_to_pdf_http(
     bottom_margin: str = "20px",
     print_background: bool = True,
     display_header_footer: bool = False,
-    use_async: bool = True,
     output_dir: Annotated[
         Optional[str],
         Field(

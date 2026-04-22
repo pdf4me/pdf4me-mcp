@@ -47,7 +47,7 @@ async def _call_metadata_api(
     payload = {
         "docContent": doc_content_base64,
         "docName": doc_name,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -110,7 +110,6 @@ async def _poll_metadata_job(
 )
 async def get_pdf_metadata_http(
     file_path: str,
-    use_async: bool = False,
 ) -> ToolResult:
     """Extract metadata from a PDF via PDF4me GetPdfMetadata.
 

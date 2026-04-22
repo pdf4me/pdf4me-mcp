@@ -33,7 +33,7 @@ async def _call_convert_to_pdf_api(
     payload = {
         "docContent": doc_content_base64,
         "docName": doc_name,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -96,7 +96,6 @@ async def _poll_convert_to_pdf_job(
 )
 async def convert_to_pdf_http(
     file_path: str,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

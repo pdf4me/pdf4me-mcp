@@ -45,7 +45,7 @@ async def _call_convert_image_format_api(
         "docName": doc_name,
         "currentImageFormat": current_image_format,
         "newImageFormat": new_image_format,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -110,7 +110,6 @@ async def convert_image_format_http(
     file_path: str,
     current_image_format: Literal["BMP", "GIF", "JPG", "PNG", "TIFF"] = "JPG",
     new_image_format: Literal["BMP", "GIF", "JPG", "PNG", "TIFF"] = "PNG",
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

@@ -43,7 +43,7 @@ async def _call_convert_html_to_pdf_api(
         "rightMargin": right_margin,
         "printBackground": print_background,
         "displayHeaderFooter": display_header_footer,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -123,7 +123,6 @@ async def convert_html_to_pdf_http(
     right_margin: str = "40px",
     print_background: bool = True,
     display_header_footer: bool = True,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

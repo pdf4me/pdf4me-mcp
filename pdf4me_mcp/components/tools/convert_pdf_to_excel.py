@@ -13,7 +13,7 @@ from pdf4me_mcp.config import config
 from pdf4me_mcp.helper import file_to_base64, resolve_polling_url, write_file_from_bytes
 
 _ASYNC_POLL_MAX_ATTEMPTS = 25
-_ASYNC_POLL_INTERVAL_SEC = 2.0
+_ASYNC_POLL_INTERVAL_SEC = 10.0
 
 
 def _xlsx_filename_hint(doc_name: str) -> str:
@@ -98,7 +98,7 @@ async def _call_convert_pdf_to_excel_api(
         "language": language,
         "outputFormat": "Xlsx",
         "ocrWhenNeeded": "true" if ocr_when_needed else "false",
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -167,7 +167,6 @@ async def convert_pdf_to_excel_http(
     merge_all_sheets: bool = True,
     language: str = "English",
     ocr_when_needed: bool = True,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

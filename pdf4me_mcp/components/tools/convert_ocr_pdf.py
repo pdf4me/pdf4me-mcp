@@ -39,7 +39,7 @@ async def _call_convert_ocr_pdf_api(
         "qualityType": quality_type,
         "ocrWhenNeeded": _api_bool_str(ocr_when_needed),
         "language": language.strip() or "eng",
-        "isAsync": use_async,
+        "isAsync": True,
     }
 
     api_base_url = config.pdf4me_base_url.rstrip("/")
@@ -117,7 +117,6 @@ async def convert_ocr_pdf_http(
     quality_type: Literal["Draft", "High"] = "Draft",
     ocr_when_needed: bool = True,
     language: str = "eng",
-    use_async: bool = False,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

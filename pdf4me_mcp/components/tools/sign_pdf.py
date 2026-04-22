@@ -75,7 +75,7 @@ async def _call_sign_pdf_api(
         "opacity": opacity,
         "showOnlyInPrint": show_only_in_print,
         "isBackground": is_background,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -155,7 +155,6 @@ async def sign_pdf_http(
     opacity: str = "100",
     show_only_in_print: bool = True,
     is_background: bool = False,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

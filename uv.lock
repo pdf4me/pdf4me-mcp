@@ -657,7 +657,7 @@ wheels = [
 
 [[package]]
 name = "pdf4me-mcp"
-version = "0.1.1"
+version = "0.1.2.dev1"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },

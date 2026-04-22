@@ -10,8 +10,11 @@ from fastmcp.tools import ToolResult
 from pdf4me_mcp.config import config
 from pdf4me_mcp.helper import file_to_base64, write_file_from_bytes
 
+# Long reads/writes for large MD base64 JSON + slow ConvertMdToPdf processing.
+_HTTP_TIMEOUT = httpx.Timeout(
+    connect=120.0, read=900.0, write=900.0, pool=120.0)
 _ASYNC_POLL_MAX_ATTEMPTS = 25
-_ASYNC_POLL_INTERVAL_SEC = 5.0
+_ASYNC_POLL_INTERVAL_SEC = 10.0
 
 
 def _pdf_name_from_doc_name(doc_name: str) -> str:
@@ -41,24 +44,25 @@ async def _call_convert_md_to_pdf_api(
         "docContent": doc_content_base64,
         "docName": doc_name,
         "mdFilePath": "",
-        "async": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Basic {PDF4ME_API_KEY}",
     }
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
         resp = await client.post(
             f"{api_base_url}/api/v2/ConvertMdToPdf",
             json=payload,
             headers=headers,
         )
         if resp.status_code == 202:
-            location = resp.headers.get("Location")
+            location = (resp.headers.get("Location") or "").strip()
             if not location:
                 raise ValueError(
                     "API returned 202 but no Location header for polling")
+
             return await _poll_convert_md_to_pdf_job(
                 client,
                 location,
@@ -97,24 +101,24 @@ async def _poll_convert_md_to_pdf_job(
     name="convert_md_to_pdf",
     description=(
         "Convert a local Markdown file (.md) to PDF using the PDF4me ConvertMdToPdf API. "
-        "Provide the file path to the Markdown file. "
-        "Optionally specify async polling and output directory/file name. "
-        "When use_async is true, the API may return 202 and the tool polls until the PDF is ready."
+        "Provide the file path to the Markdown file and output_dir where the PDF will be saved. "
+        "Long HTTP timeouts on requests. "
+        "When use_async is true, the API may return 202; the tool polls the Location URL until "
+        "complete. Optional output file name (defaults to <input_basename>.pdf)."
     ),
 )
 async def convert_md_to_pdf_http(
     file_path: str,
-    use_async: bool = True,
-    output_dir: Optional[str] = None,
+    output_dir: str,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
     """Convert Markdown to PDF via PDF4me ConvertMdToPdf.
 
     Args:
         file_path: Local path to the Markdown file (.md).
+        output_dir: Directory to save the PDF (required).
         use_async: When True, request async processing and poll the Location URL on 202
             using fixed internal retry settings (not configurable by the caller).
-        output_dir: Directory to save the PDF. Defaults to the same directory as the input file.
         output_file_name: Name for the output PDF. Defaults to <input_basename>.pdf.
     """
     doc_content_base64, extension = file_to_base64(file_path)
@@ -124,8 +128,13 @@ async def convert_md_to_pdf_http(
         )
 
     doc_name = os.path.basename(file_path)
-    resolved_output_dir = output_dir if output_dir else os.path.dirname(
-        os.path.abspath(file_path))
+
+    if not output_dir or not output_dir.strip():
+        return ToolResult(
+            content="output_dir is required. Please provide an output directory path."
+        )
+
+    resolved_output_dir = output_dir.strip()
     resolved_output_name = (
         output_file_name if output_file_name else _pdf_name_from_doc_name(
             doc_name)
@@ -151,6 +160,10 @@ async def convert_md_to_pdf_http(
             )
         return ToolResult(
             content=f"API error {exc.response.status_code}: {exc.response.text}"
+        )
+    except httpx.ReadTimeout as exc:
+        return ToolResult(
+            content=f"HTTP read timed out waiting for PDF4me (payload may be large): {exc}"
         )
     except httpx.RequestError as exc:
         return ToolResult(content=f"Request failed: {exc}")

@@ -31,7 +31,7 @@ async def _call_rotate_page_api(
         "docName": doc_name,
         "rotationType": rotation_type,
         "page": page,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -107,7 +107,6 @@ async def rotate_pdf_page_http(
     rotation_type: Literal[
         "NoRotation", "Clockwise", "CounterClockwise", "UpsideDown"
     ] = "Clockwise",
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

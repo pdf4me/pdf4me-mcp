@@ -42,7 +42,7 @@ async def _call_pdf_a_api(
         "compliance": compliance,
         "allowUpgrade": allow_upgrade,
         "allowDowngrade": allow_downgrade,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -115,7 +115,6 @@ async def convert_pdf_to_pdfa_http(
     compliance: PdfACompliance = "PdfA1b",
     allow_upgrade: bool = True,
     allow_downgrade: bool = True,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

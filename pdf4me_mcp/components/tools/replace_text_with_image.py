@@ -46,7 +46,7 @@ async def _call_replace_text_with_image_api(
         "imageContent": image_content_base64,
         "imageHeight": image_height,
         "imageWidth": image_width,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -117,7 +117,6 @@ async def replace_text_with_image_http(
     page_sequence: str = "all",
     image_height: int = 50,
     image_width: int = 100,
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

@@ -48,7 +48,7 @@ async def _call_fill_pdf_form_api(
         "metaData": "",
         "metaDataJson": "",
         "InputFormData": _input_form_data_from_dict(form_data),
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -112,7 +112,6 @@ async def _poll_fill_pdf_form_job(
 async def fill_pdf_form_http(
     file_path: str,
     form_data: dict[str, Any],
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:
