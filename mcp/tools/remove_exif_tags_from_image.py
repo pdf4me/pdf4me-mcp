@@ -56,7 +56,7 @@ async def _call_remove_exif_tags_api(
         "docContent": doc_content_base64,
         "docName": doc_name,
         "imageType": image_type,
-        "isAsync": use_async,
+        "isAsync": True,
     }
     api_base_url = config.pdf4me_base_url.rstrip("/")
     headers = {
@@ -122,7 +122,6 @@ async def remove_exif_tags_from_image_http(
     file_path: str,
     output_file_name: str,
     image_type: Optional[_ImageType] = None,
-    use_async: bool = True,
     output_dir: Optional[str] = None
 ) -> ToolResult:
     """Remove EXIF metadata from an image using PDF4me RemoveEXIFTagsFromImage.

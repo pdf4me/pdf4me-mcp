@@ -154,7 +154,6 @@ async def _call_merge_api(
 async def merge_multiple_pdfs(
     pdf_file_paths: list[str],
     request_doc_name: str = "merged_output.pdf",
-    use_async: bool = True,
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
 ) -> ToolResult:

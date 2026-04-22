@@ -152,7 +152,6 @@ async def _call_merge_overlay_api(
 async def merge_pdf_overlay(
     base_pdf_file_path: str,
     overlay_pdf_file_path: str,
-    use_async: bool = True,
     output_doc_name: str = "merged_overlay.pdf",
     output_dir: Optional[str] = None,
     output_file_name: Optional[str] = None,
