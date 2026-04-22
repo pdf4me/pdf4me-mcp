@@ -1,6 +1,6 @@
 # PDF4me MCP Server
 
-PDF4me MCP Server provides [PDF4me API](https://dev.pdf4me.com) functionality through the Model Context Protocol (MCP), enabling AI assistants to easily perform a wide range of PDF, document, image, and barcode processing tasks.
+PDF4me MCP Server provides <a href="https://dev.pdf4me.com" target="_blank" rel="noopener noreferrer">PDF4me API</a> functionality through the Model Context Protocol (MCP), enabling AI assistants to easily perform a wide range of PDF, document, image, and barcode processing tasks.
 
 ---
 
@@ -84,12 +84,12 @@ PDF4me MCP Server provides [PDF4me API](https://dev.pdf4me.com) functionality th
 
 ### 🔑 Get API Key
 
-1. Sign up at [dev.pdf4me.com](https://dev.pdf4me.com)
+1. Sign up at <a href="https://dev.pdf4me.com" target="_blank" rel="noopener noreferrer">dev.pdf4me.com</a>
 2. Get your API key from the dashboard
 
 ### 📦 Install UV
 
-You need [UV](https://docs.astral.sh/uv/) (a fast Python packaging tool) to run this MCP server.
+You need <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener noreferrer">UV</a> (a fast Python packaging tool) to run this MCP server.
 
 **macOS / Linux**
 
@@ -116,7 +116,7 @@ pipx install uv
 pip install uv
 ```
 
-For more options, see the [UV installation guide](https://docs.astral.sh/uv/getting-started/installation/).
+For more options, see the <a href="https://docs.astral.sh/uv/getting-started/installation/" target="_blank" rel="noopener noreferrer">UV installation guide</a>.
 
 ---
 
@@ -497,9 +497,9 @@ API_KEY=your-api-key-here pdf4me-mcp
 
 ## 📞 Support & Contact
 
-- **PDF4me**: [pdf4me.com](https://dev.pdf4me.com)
-- **API Documentation**: [docs.pdf4me.com](https://docs.pdf4me.com)
-- **Issue Reports**: [GitHub Issues](https://github.com/pdf4me/pdf4me-mcp/issues)
+- **PDF4me**: <a href="https://dev.pdf4me.com" target="_blank" rel="noopener noreferrer">pdf4me.com</a>
+- **API Documentation**: <a href="https://docs.pdf4me.com" target="_blank" rel="noopener noreferrer">docs.pdf4me.com</a>
+- **Issue Reports**: <a href="https://github.com/pdf4me/pdf4me-mcp/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>
 
 ---
 
