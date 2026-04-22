@@ -1,10 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
 [project]
 name = "pdf4me-mcp"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.1.3"
+description = "PDF4me MCP Server for PDF and document automation workflows"
 readme = "README.md"
-requires-python = ">=3.14"
-dependencies = [
-    "fastmcp>=3.2.4",
-    "httpx>=0.28.1",
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = ["fastmcp>=3.2.4", "httpx>=0.28.1"]
+keywords = [
+  "pdf",
+  "mcp",
+  "pdf4me",
+  "fastmcp",
+  "model-context-protocol",
+  "llm",
+  "ai",
 ]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: OS Independent",
+  "Topic :: Office/Business",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.scripts]
+pdf4me-mcp = "pdf4me_mcp.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pdf4me_mcp"]
