@@ -114,7 +114,7 @@ async def _call_split_pdf_by_barcode_api(
     payload: dict[str, Any], pdf4me_api_key: str
 ) -> Any:
     api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/SplitPdfByBarcode_old"
+    url = f"{api_base_url}/api/v2/SplitPdfByBarcode"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Basic {pdf4me_api_key}",
