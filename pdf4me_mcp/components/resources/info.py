@@ -64,7 +64,7 @@ def available_tools() -> str:
         "- split_pdf_by_text: Split PDF by matching text via /api/v2/SplitByText. "
         "pdf_file_path, text, split_text_page (before/after), file_naming; optional output_dir; "
         "saves split PDFs and raw JSON.\n"
-        "- split_pdf_by_swiss_qr: Split PDF by Swiss QR via /api/v2/FlowV2/SplitPdfByBarcode. "
+        "- split_pdf_by_swiss_qr: Split PDF by Swiss QR via /api/v2/SplitPdfByBarcode. "
         "pdf_file_path, split_qr_page, pdf_render_dpi, combine_pages_with_same_barcodes, return_as_zip; "
         "optional output_dir; saves split PDFs (or ZIP) and raw JSON.\n"
         "- split_pdf_by_barcode: Split PDF by barcode via /api/v2/SplitByBarcode. "

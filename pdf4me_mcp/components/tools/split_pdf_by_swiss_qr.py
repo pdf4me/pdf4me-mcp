@@ -112,7 +112,7 @@ async def _call_split_pdf_by_swiss_qr_api(
     payload: dict[str, Any], pdf4me_api_key: str
 ) -> httpx.Response:
     api_base_url = config.pdf4me_base_url.rstrip("/")
-    url = f"{api_base_url}/api/v2/FlowV2/SplitPdfByBarcode"
+    url = f"{api_base_url}/api/v2/SplitPdfByBarcode"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Basic {pdf4me_api_key}",
@@ -167,7 +167,7 @@ def _normalize_split_barcode_page(value: str) -> str:
 @tool(
     name="split_pdf_by_swiss_qr",
     description=(
-        "Split a PDF by Swiss QR via PDF4me FlowV2 SplitPdfByBarcode "
+        "Split a PDF by Swiss QR via PDF4me  SplitPdfByBarcode (/api/v2/SplitPdfByBarcode) "
         "(SplitDocBySwissQrCode). pdf_file_path, barcode_string (default SPC), "
         "barcode_filter, barcode_type, split_qr_page (before/after), pdf_render_dpi, "
         "combine_pages_with_same_barcodes (maps to combinePagesWithSameConsecutiveBarcodes)."
