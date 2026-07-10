@@ -1,5 +1,7 @@
 # PDF4me MCP Server
 
+<!-- mcp-name: io.github.pdf4me/pdf4me-mcp -->
+
 PDF4me MCP Server provides <a href="https://dev.pdf4me.com" target="_blank" rel="noopener noreferrer">PDF4me API</a> functionality through the Model Context Protocol (MCP), enabling AI assistants to easily perform a wide range of PDF, document, image, and barcode processing tasks.
 
 ---

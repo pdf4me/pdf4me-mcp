@@ -1,0 +1,27 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.pdf4me/pdf4me-mcp",
+  "title": "PDF4me",
+  "description": "PDF & document automation via the PDF4me API — convert, OCR, extract, edit, secure.",
+  "version": "0.1.4",
+  "repository": {
+    "url": "https://github.com/pdf4me/pdf4me-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "pdf4me-mcp",
+      "version": "0.1.4",
+      "runtimeHint": "uvx",
+      "transport": { "type": "stdio" }
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.pdf4me.com/mcp"
+    }
+  ]
+}
