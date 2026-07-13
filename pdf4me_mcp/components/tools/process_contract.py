@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -17,9 +16,6 @@ _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 _ALLOWED_INPUT_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg"})
-_DEFAULT_DOC_NAME = "contract.pdf"
-
-
 def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
     if data.startswith(b"\xef\xbb\xbf"):
         data = data[3:]
@@ -55,19 +51,9 @@ def _effective_contract_dict(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "contract"
-    slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "contract"
-
-
 def _default_output_dir_for_file(contract_file_path: str) -> str:
     p = Path(contract_file_path).resolve()
     return str(p.parent / f"process_contract_{p.stem}")
-
-
-def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_contract_{_slug_from_doc_name(doc_name)}")
 
 
 async def _poll_process_contract_job(
@@ -129,10 +115,8 @@ async def _call_process_contract_api(
         "AI-Process Contract: extract structured data from a contract via PDF4me "
         "POST /api/v2/ProcessContract. Request JSON has only docContent, docName, and IsAsync (must be true); "
         "this action does not send customFieldKeys or CustomFieldKeys. "
-        "Provide exactly one of: pdf_file_path (local .pdf/.png/.jpg/.jpeg as Base64) "
-        "or doc_content (Base64, blob id, or URL per your PDF4me setup). "
-        "doc_name: logical file name (e.g. contract.pdf); optional with pdf_file_path (defaults to basename), "
-        f"defaults to {_DEFAULT_DOC_NAME!r} when using doc_content if omitted. "
+        "Provide pdf_file_path (local .pdf/.png/.jpg/.jpeg as Base64). "
+        "doc_name: logical file name (e.g. contract.pdf); optional (defaults to basename). "
         "Async: 202 + Location poll until JSON; saves process_contract.json."
     ),
 )
@@ -142,14 +126,10 @@ async def process_contract(
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = False
 
     if not has_path:
         return ToolResult(
-            content=(
-                "Provide exactly one of pdf_file_path (local contract file) or "
-                "doc_content (Base64, blob id, or URL per your integration)."
-            )
+            content="Provide pdf_file_path (local contract file)."
         )
 
     pdf4me_api_key = config.api_key
@@ -158,29 +138,23 @@ async def process_contract(
             content="Authentication failed: no API key provided in the request."
         )
 
-    if has_path:
-        path = str(pdf_file_path).strip()
-        try:
-            encoded, ext = file_to_base64(path)
-        except OSError as exc:
-            return ToolResult(content=f"Could not read contract file: {exc}")
-        ext_lower = ext.lower()
-        if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
-            return ToolResult(
-                content=(
-                    f"Unsupported file type '{ext}'. "
-                    f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
-                )
+    path = str(pdf_file_path).strip()
+    try:
+        encoded, ext = file_to_base64(path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read contract file: {exc}")
+    ext_lower = ext.lower()
+    if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
+        return ToolResult(
+            content=(
+                f"Unsupported file type '{ext}'. "
+                f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
             )
-        content_for_api = encoded
-        resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(
-            path)
-    else:
-        content_for_api = str(doc_content).strip()
-        resolved_doc_name = (doc_name or "").strip() or _DEFAULT_DOC_NAME
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(
-            resolved_doc_name)
+        )
+    content_for_api = encoded
+    resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
+    resolved_out = output_dir if output_dir else _default_output_dir_for_file(
+        path)
 
     _suffixes = tuple(_ALLOWED_INPUT_EXTENSIONS)
     if not resolved_doc_name.lower().endswith(_suffixes):

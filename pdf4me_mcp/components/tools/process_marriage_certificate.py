@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -17,17 +16,6 @@ _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 _ALLOWED_INPUT_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg"})
-_DEFAULT_DOC_NAME = "marriage_certificate.pdf"
-
-
-def _strip_data_url_prefix(content: str) -> str:
-    """If doc_content is a data URL, return only the part after the first comma."""
-    s = content.strip()
-    if s.lower().startswith("data:") and "," in s:
-        return s.split(",", 1)[1].strip()
-    return s
-
-
 def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
     if data.startswith(b"\xef\xbb\xbf"):
         data = data[3:]
@@ -64,19 +52,9 @@ def _effective_certificate_dict(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "marriage_certificate"
-    slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "marriage_certificate"
-
-
 def _default_output_dir_for_file(file_path: str) -> str:
     p = Path(file_path).resolve()
     return str(p.parent / f"process_marriage_certificate_{p.stem}")
-
-
-def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_marriage_certificate_{_slug_from_doc_name(doc_name)}")
 
 
 async def _poll_process_marriage_certificate_job(
@@ -139,10 +117,8 @@ async def _call_process_marriage_certificate_api(
         "POST /api/v2/ProcessMarriageCertificate. Base body: docContent, docName, IsAsync (true). "
         "VerifyAuthenticity is sent only when verify_authenticity is true (property omitted when false). "
         "CustomFieldKeys (PascalCase) is sent only when custom_field_keys is a non-empty list. "
-        "Provide exactly one of: pdf_file_path (local .pdf/.png/.jpg/.jpeg) or "
-        "doc_content (Base64, data URL—prefix before comma stripped—blob id, or URL; non-PDF images allowed). "
-        "doc_name optional with file path (basename); with doc_content alone defaults to "
-        f"{_DEFAULT_DOC_NAME!r}; names without an extension get .pdf. "
+        "Provide pdf_file_path (local .pdf/.png/.jpg/.jpeg). "
+        "doc_name optional (basename); names without an extension get .pdf. "
         "202 + Location poll; saves process_marriage_certificate.json."
     ),
 )
@@ -154,14 +130,10 @@ async def process_marriage_certificate(
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = False
 
     if not has_path:
         return ToolResult(
-            content=(
-                "Provide exactly one of pdf_file_path (local marriage certificate file) or "
-                "doc_content (Base64, data URL, blob id, or URL per your integration)."
-            )
+            content="Provide pdf_file_path (local marriage certificate file)."
         )
 
     pdf4me_api_key = config.api_key
@@ -170,30 +142,23 @@ async def process_marriage_certificate(
             content="Authentication failed: no API key provided in the request."
         )
 
-    if has_path:
-        path = str(pdf_file_path).strip()
-        try:
-            encoded, ext = file_to_base64(path)
-        except OSError as exc:
-            return ToolResult(content=f"Could not read file: {exc}")
-        ext_lower = ext.lower()
-        if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
-            return ToolResult(
-                content=(
-                    f"Unsupported file type '{ext}'. "
-                    f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
-                )
+    path = str(pdf_file_path).strip()
+    try:
+        encoded, ext = file_to_base64(path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read file: {exc}")
+    ext_lower = ext.lower()
+    if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
+        return ToolResult(
+            content=(
+                f"Unsupported file type '{ext}'. "
+                f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
             )
-        content_for_api = encoded
-        resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(
-            path)
-    else:
-        raw_content = str(doc_content).strip()
-        content_for_api = _strip_data_url_prefix(raw_content)
-        resolved_doc_name = (doc_name or "").strip() or _DEFAULT_DOC_NAME
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(
-            resolved_doc_name)
+        )
+    content_for_api = encoded
+    resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
+    resolved_out = output_dir if output_dir else _default_output_dir_for_file(
+        path)
 
     _suffixes = tuple(_ALLOWED_INPUT_EXTENSIONS)
     if not resolved_doc_name.lower().endswith(_suffixes):

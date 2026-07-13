@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -17,15 +16,6 @@ _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 _ALLOWED_INPUT_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg"})
-_DEFAULT_DOC_NAME = "order.pdf"
-
-
-def _strip_data_url_prefix(content: str) -> str:
-    """If doc_content is a data URL, return only the part after the first comma."""
-    s = content.strip()
-    if s.lower().startswith("data:") and "," in s:
-        return s.split(",", 1)[1].strip()
-    return s
 
 
 def _sanitize_profiles(profiles: Optional[str]) -> Optional[str]:
@@ -75,19 +65,9 @@ def _effective_order_dict(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "order"
-    slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "order"
-
-
 def _default_output_dir_for_file(file_path: str) -> str:
     p = Path(file_path).resolve()
     return str(p.parent / f"process_order_{p.stem}")
-
-
-def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_order_{_slug_from_doc_name(doc_name)}")
 
 
 async def _poll_process_order_job(
@@ -148,11 +128,11 @@ async def _call_process_order_api(
     description=(
         "AI-Process Order (processOrder): extract structured order data via PDF4me POST /api/v2/ProcessOrder. "
         "JSON body: docName, docContent, isAsync (true), and optional profiles only. "
-        "doc_name is sent as docName as provided or defaulted (basename from pdf_file_path, or "
-        f"{_DEFAULT_DOC_NAME!r} with doc_content only)—not overwritten by the server. "
-        "Exactly one of pdf_file_path (local .pdf/.png/.jpg/.jpeg) or doc_content (PDF base64, blob id, or URL). "
+        "doc_name is sent as docName as provided or defaulted (basename from pdf_file_path)—"
+        "not overwritten by the server. "
+        "Provide pdf_file_path (local .pdf/.png/.jpg/.jpeg). "
         "Optional profiles: trim then omit if empty; otherwise if it does not start with an opening curly brace "
-        "or square bracket, wrap in outer curly braces. Data URL doc_content: strip prefix before first comma. "
+        "or square bracket, wrap in outer curly braces. "
         "202 + Location poll; saves process_order.json."
     ),
 )
@@ -163,14 +143,10 @@ async def process_order(
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = False
 
     if not has_path:
         return ToolResult(
-            content=(
-                "Provide exactly one of pdf_file_path (local order document) or "
-                "doc_content (Base64, data URL, blob id, or URL per your integration)."
-            )
+            content="Provide pdf_file_path (local order document)."
         )
 
     pdf4me_api_key = config.api_key
@@ -179,30 +155,23 @@ async def process_order(
             content="Authentication failed: no API key provided in the request."
         )
 
-    if has_path:
-        path = str(pdf_file_path).strip()
-        try:
-            encoded, ext = file_to_base64(path)
-        except OSError as exc:
-            return ToolResult(content=f"Could not read file: {exc}")
-        ext_lower = ext.lower()
-        if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
-            return ToolResult(
-                content=(
-                    f"Unsupported file type '{ext}'. "
-                    f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
-                )
+    path = str(pdf_file_path).strip()
+    try:
+        encoded, ext = file_to_base64(path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read file: {exc}")
+    ext_lower = ext.lower()
+    if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
+        return ToolResult(
+            content=(
+                f"Unsupported file type '{ext}'. "
+                f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
             )
-        content_for_api = encoded
-        resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(
-            path)
-    else:
-        raw_content = str(doc_content).strip()
-        content_for_api = _strip_data_url_prefix(raw_content)
-        resolved_doc_name = (doc_name or "").strip() or _DEFAULT_DOC_NAME
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(
-            resolved_doc_name)
+        )
+    content_for_api = encoded
+    resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
+    resolved_out = output_dir if output_dir else _default_output_dir_for_file(
+        path)
 
     _suffixes = tuple(_ALLOWED_INPUT_EXTENSIONS)
     if not resolved_doc_name.lower().endswith(_suffixes):

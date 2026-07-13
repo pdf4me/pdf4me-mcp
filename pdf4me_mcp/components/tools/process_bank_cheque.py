@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -17,7 +16,6 @@ _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 _ALLOWED_INPUT_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg"})
-_DEFAULT_DOC_NAME = "cheque.pdf"
 
 
 def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
@@ -57,19 +55,9 @@ def _effective_cheque_dict(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "cheque"
-    slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "cheque"
-
-
 def _default_output_dir_for_file(cheque_file_path: str) -> str:
     p = Path(cheque_file_path).resolve()
     return str(p.parent / f"process_bank_cheque_{p.stem}")
-
-
-def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_bank_cheque_{_slug_from_doc_name(doc_name)}")
 
 
 async def _poll_process_bank_cheque_job(
@@ -132,10 +120,8 @@ async def _call_process_bank_cheque_api(
         "POST /api/v2/ProcessBankCheque (isAsync true: 202 + Location poll until JSON result). "
         "Request body uses isAsync (camelCase) and CustomFieldKeys (PascalCase) when custom keys are sent—"
         "not the IsAsync/customFieldKeys shape used by AI-Invoice Parser. "
-        "Provide exactly one of: pdf_file_path (local .pdf/.png/.jpg/.jpeg as Base64) "
-        "or doc_content (Base64, blob id, or URL per your PDF4me setup). "
-        "doc_name: logical file name (e.g. cheque.pdf); optional with pdf_file_path (defaults to basename), "
-        f"defaults to {_DEFAULT_DOC_NAME!r} when using doc_content if omitted. "
+        "Provide pdf_file_path (local .pdf/.png/.jpg/.jpeg as Base64). "
+        "doc_name: logical file name (e.g. cheque.pdf); optional (defaults to basename). "
         "Optional custom_field_keys: include only as a non-empty list (property omitted when unused). "
         "Saves the full API JSON to process_bank_cheque.json."
     ),
@@ -147,14 +133,10 @@ async def process_bank_cheque(
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = False
 
     if not has_path:
         return ToolResult(
-            content=(
-                "Provide exactly one of pdf_file_path (local cheque image/PDF) or "
-                "doc_content (Base64, blob id, or URL per your integration)."
-            )
+            content="Provide pdf_file_path (local cheque image/PDF)."
         )
 
     pdf4me_api_key = config.api_key
@@ -163,29 +145,23 @@ async def process_bank_cheque(
             content="Authentication failed: no API key provided in the request."
         )
 
-    if has_path:
-        path = str(pdf_file_path).strip()
-        try:
-            encoded, ext = file_to_base64(path)
-        except OSError as exc:
-            return ToolResult(content=f"Could not read cheque file: {exc}")
-        ext_lower = ext.lower()
-        if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
-            return ToolResult(
-                content=(
-                    f"Unsupported file type '{ext}'. "
-                    f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
-                )
+    path = str(pdf_file_path).strip()
+    try:
+        encoded, ext = file_to_base64(path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read cheque file: {exc}")
+    ext_lower = ext.lower()
+    if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
+        return ToolResult(
+            content=(
+                f"Unsupported file type '{ext}'. "
+                f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
             )
-        content_for_api = encoded
-        resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(
-            path)
-    else:
-        content_for_api = str(doc_content).strip()
-        resolved_doc_name = (doc_name or "").strip() or _DEFAULT_DOC_NAME
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(
-            resolved_doc_name)
+        )
+    content_for_api = encoded
+    resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
+    resolved_out = output_dir if output_dir else _default_output_dir_for_file(
+        path)
 
     _suffixes = tuple(_ALLOWED_INPUT_EXTENSIONS)
     if not resolved_doc_name.lower().endswith(_suffixes):
