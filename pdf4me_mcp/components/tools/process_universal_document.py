@@ -1,10 +1,8 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import unquote, urlparse
 
 import httpx
 
@@ -19,14 +17,6 @@ _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 _ALLOWED_INPUT_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg"})
 _DEFAULT_DOC_NAME = "document.pdf"
-
-
-def _strip_data_url_prefix(content: str) -> str:
-    """If doc_content is a data URL, return only the part after the first comma."""
-    s = content.strip()
-    if s.lower().startswith("data:") and "," in s:
-        return s.split(",", 1)[1].strip()
-    return s
 
 
 def _sanitize_profiles(profiles: Optional[str]) -> Optional[str]:
@@ -62,42 +52,6 @@ def _merged_field_names(
             seen.add(name)
             out.append(name)
     return out
-
-
-def _input_doc_name_universal(
-    user_doc_name: Optional[str],
-    has_path: bool,
-    path: Optional[str],
-    content_for_api: str,
-) -> str:
-    """inputDocName: binary basename or user; URL segment or user; base64 user doc name."""
-    user = (user_doc_name or "").strip()
-    if has_path and path:
-        base = os.path.basename(path).strip()
-        return base or user
-    u = content_for_api.strip()
-    if u.lower().startswith(("http://", "https://")):
-        seg = unquote(os.path.basename(urlparse(u).path.rstrip("/"))).strip()
-        return seg or user
-    return user
-
-
-def _resolve_universal_doc_name(
-    user_doc_name: Optional[str],
-    has_path: bool,
-    path: Optional[str],
-    content_for_api: str,
-) -> str:
-    """docName = trimmed inputDocName if set, else trimmed user docName, else document.pdf."""
-    inner = _input_doc_name_universal(
-        user_doc_name, has_path=has_path, path=path, content_for_api=content_for_api
-    ).strip()
-    user = (user_doc_name or "").strip()
-    if inner:
-        return inner
-    if user:
-        return user
-    return _DEFAULT_DOC_NAME
 
 
 def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
@@ -137,19 +91,9 @@ def _effective_universal_dict(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "document"
-    slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "document"
-
-
 def _default_output_dir_for_file(file_path: str) -> str:
     p = Path(file_path).resolve()
     return str(p.parent / f"process_universal_document_{p.stem}")
-
-
-def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_universal_document_{_slug_from_doc_name(doc_name)}")
 
 
 async def _poll_process_universal_document_job(
@@ -209,12 +153,11 @@ async def _call_process_universal_document_api(
     title="AI - Universal Document Data Extraction",
     description=(
         "AI - Universal Document Data Extraction (processUniversalDocument): extract named fields via PDF4me "
-        "POST /api/v2/ProcessUniversalDocument. docName = trimmed inputDocName if set, else doc_name, else "
-        f"{_DEFAULT_DOC_NAME!r}. inputDocName: file basename, or URL last path segment (decoded) or doc_name, "
-        "or base64 uses doc_name. fields (required): at least one field name—use fields and/or fields_csv "
+        "POST /api/v2/ProcessUniversalDocument. docName = file basename if available, else doc_name, else "
+        f"{_DEFAULT_DOC_NAME!r}. fields (required): at least one field name—use fields and/or fields_csv "
         "(comma-separated, trimmed). mode: 0 Standard (default) or 1 Strict. isAsync true. "
         "Optional documentType (omit if empty); optional profiles (sanitized). "
-        "Exactly one of pdf_file_path or doc_content (base64, blob id, or URL). Data URL: strip prefix before comma. "
+        "Provide pdf_file_path (local .pdf/.png/.jpg/.jpeg). "
         "202 + Location poll; saves process_universal_document.json."
     ),
 )
@@ -229,14 +172,10 @@ async def process_universal_document(
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = False
 
     if not has_path:
         return ToolResult(
-            content=(
-                "Provide exactly one of pdf_file_path (local document file) or "
-                "doc_content (Base64, data URL, blob id, or URL per your integration)."
-            )
+            content="Provide pdf_file_path (local document file)."
         )
 
     merged_fields = _merged_field_names(fields, fields_csv)
@@ -257,28 +196,25 @@ async def process_universal_document(
             content="Authentication failed: no API key provided in the request."
         )
 
-    path: Optional[str] = None
-    if has_path:
-        path = str(pdf_file_path).strip()
-        try:
-            encoded, ext = file_to_base64(path)
-        except OSError as exc:
-            return ToolResult(content=f"Could not read file: {exc}")
-        ext_lower = ext.lower()
-        if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
-            return ToolResult(
-                content=(
-                    f"Unsupported file type '{ext}'. "
-                    f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
-                )
+    path = str(pdf_file_path).strip()
+    try:
+        encoded, ext = file_to_base64(path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read file: {exc}")
+    ext_lower = ext.lower()
+    if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
+        return ToolResult(
+            content=(
+                f"Unsupported file type '{ext}'. "
+                f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
             )
-        content_for_api = encoded
-    else:
-        raw_content = str(doc_content).strip()
-        content_for_api = _strip_data_url_prefix(raw_content)
+        )
+    content_for_api = encoded
 
-    resolved_doc_name = _resolve_universal_doc_name(
-        doc_name, has_path=has_path, path=path, content_for_api=content_for_api
+    resolved_doc_name = (
+        os.path.basename(path).strip()
+        or (doc_name or "").strip()
+        or _DEFAULT_DOC_NAME
     )
 
     _suffixes = tuple(_ALLOWED_INPUT_EXTENSIONS)
@@ -286,12 +222,8 @@ async def process_universal_document(
         if "." not in resolved_doc_name.lower():
             resolved_doc_name = f"{resolved_doc_name}.pdf"
 
-    if has_path and path:
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(
-            path)
-    else:
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(
-            resolved_doc_name)
+    resolved_out = output_dir if output_dir else _default_output_dir_for_file(
+        path)
 
     payload: dict[str, Any] = {
         "docName": resolved_doc_name,

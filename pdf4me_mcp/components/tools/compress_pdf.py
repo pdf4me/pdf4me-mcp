@@ -85,6 +85,10 @@ async def _call_compress_api(
         "optimizeProfile": optimize_profile,
         "isAsync": True,
     }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {PDF4ME_API_KEY}",
+    }
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(url, json=payload, headers=headers)
         if resp.status_code == 202:

@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -50,19 +49,9 @@ def _effective_invoice_dict(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "invoice"
-    slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "invoice"
-
-
 def _default_output_dir_for_file(invoice_file_path: str) -> str:
     p = Path(invoice_file_path).resolve()
     return str(p.parent / f"process_invoice_{p.stem}")
-
-
-def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_invoice_{_slug_from_doc_name(doc_name)}")
 
 
 async def _poll_process_invoice_job(
@@ -123,10 +112,9 @@ async def _call_process_invoice_api(
     description=(
         "AI-Invoice Parser: extract structured invoice data from a document via PDF4me "
         "POST /api/v2/ProcessInvoice (async: 202 + Location poll until JSON result). "
-        "Provide exactly one of: pdf_file_path (local .pdf/.png/.jpg/.jpeg read as Base64) "
-        "or doc_content (Base64 file content, upload blob id, or public URL string—per your PDF4me setup). "
-        "doc_name: logical document name for the API (e.g. invoice.pdf); optional when using pdf_file_path "
-        "(defaults to the file basename), required when using doc_content. "
+        "Provide pdf_file_path (local .pdf/.png/.jpg/.jpeg read as Base64). "
+        "doc_name: logical document name for the API (e.g. invoice.pdf); optional "
+        "(defaults to the file basename). "
         "Optional custom_field_keys: non-empty list of extra field names for the model to extract; "
         "omit the parameter when you have no custom keys (empty lists are not sent). "
         "Saves the full API JSON to process_invoice.json and returns key fields (invoiceNumber, vendorName, total, success, …)."
@@ -139,14 +127,10 @@ async def process_invoice(
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = False
 
     if not has_path:
         return ToolResult(
-            content=(
-                "Provide exactly one of pdf_file_path (local invoice file) or "
-                "doc_content (Base64, blob id, or URL per your integration)."
-            )
+            content="Provide pdf_file_path (local invoice file)."
         )
 
     pdf4me_api_key = config.api_key
@@ -155,37 +139,23 @@ async def process_invoice(
             content="Authentication failed: no API key provided in the request."
         )
 
-    if has_path:
-        path = str(pdf_file_path).strip()
-        try:
-            encoded, ext = file_to_base64(path)
-        except OSError as exc:
-            return ToolResult(content=f"Could not read invoice file: {exc}")
-        ext_lower = ext.lower()
-        if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
-            return ToolResult(
-                content=(
-                    f"Unsupported file type '{ext}'. "
-                    f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
-                )
+    path = str(pdf_file_path).strip()
+    try:
+        encoded, ext = file_to_base64(path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read invoice file: {exc}")
+    ext_lower = ext.lower()
+    if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
+        return ToolResult(
+            content=(
+                f"Unsupported file type '{ext}'. "
+                f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
             )
-        content_for_api = encoded
-        base = (doc_name or "").strip() or os.path.basename(path)
-        resolved_doc_name = base
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(
-            path)
-    else:
-        content_for_api = str(doc_content).strip()
-        resolved_doc_name = (doc_name or "").strip()
-        if not resolved_doc_name:
-            return ToolResult(
-                content=(
-                    "doc_name is required when using doc_content (logical name for the invoice, "
-                    "e.g. invoice.pdf)."
-                )
-            )
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(
-            resolved_doc_name)
+        )
+    content_for_api = encoded
+    resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
+    resolved_out = output_dir if output_dir else _default_output_dir_for_file(
+        path)
 
     _suffixes = tuple(_ALLOWED_INPUT_EXTENSIONS)
     if not resolved_doc_name.lower().endswith(_suffixes):

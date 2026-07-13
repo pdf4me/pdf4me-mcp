@@ -137,7 +137,6 @@ async def replace_text_with_image_http(
             content=f"Image file must be a supported image type, got '{img_ext}' instead."
         )
 
-    pdf_basename = os.path.basename(file_path)
     if not replace_text.strip():
         return ToolResult(content="replace_text must be a non-empty string.")
 

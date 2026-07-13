@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -17,36 +16,6 @@ _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 _ALLOWED_INPUT_EXTENSIONS = frozenset({".pdf"})
-_DEFAULT_DOC_NAME = "mortgage.pdf"
-_PDF_BASE64_PREFIX = "JVBERi0x"
-
-
-def _strip_data_url_prefix(content: str) -> str:
-    """If doc_content is a data URL, return only the part after the first comma."""
-    s = content.strip()
-    if s.lower().startswith("data:") and "," in s:
-        return s.split(",", 1)[1].strip()
-    return s
-
-
-def _mortgage_doc_content_pdf_prefix_error(after_data_url: str) -> Optional[str]:
-    """Require PDF base64 prefix for long base64 payloads; skip for URLs and short/blob-like values."""
-    s = after_data_url.strip()
-    if s.lower().startswith(("http://", "https://")):
-        return None
-    if len(s) < 48:
-        return None
-    normalized = re.sub(r"\s+", "", s)
-    if not re.fullmatch(r"[A-Za-z0-9+/=]+", normalized):
-        return None
-    if not normalized.startswith(_PDF_BASE64_PREFIX):
-        return (
-            "For PDF base64 doc_content, after stripping any data: URL prefix the payload "
-            f"must start with {_PDF_BASE64_PREFIX!r} (standard PDF base64 prefix)."
-        )
-    return None
-
-
 def _file_starts_with_pdf_magic(path: str) -> bool:
     with open(path, "rb") as f:
         return f.read(5).startswith(b"%PDF")
@@ -87,19 +56,9 @@ def _effective_mortgage_dict(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "mortgage"
-    slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "mortgage"
-
-
 def _default_output_dir_for_file(file_path: str) -> str:
     p = Path(file_path).resolve()
     return str(p.parent / f"process_mortgage_document_{p.stem}")
-
-
-def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_mortgage_document_{_slug_from_doc_name(doc_name)}")
 
 
 async def _poll_process_mortgage_document_job(
@@ -162,10 +121,8 @@ async def _call_process_mortgage_document_api(
         "POST /api/v2/ProcessMortgageDocument. Uses camelCase isAsync (true), not IsAsync. "
         "Body: docContent, docName, isAsync; optional documentType (hint, e.g. loan—omitted when empty); "
         "CustomFieldKeys (PascalCase) only when custom_field_keys is non-empty. "
-        "Exactly one of pdf_file_path (local .pdf only, must be a PDF file) or "
-        "doc_content (PDF base64, blob id, or URL). For base64 after stripping a data: URL prefix, "
-        f"long base64 payloads must start with {_PDF_BASE64_PREFIX!r}. "
-        "doc_name optional (basename or mortgage.pdf); 202 + Location poll; saves process_mortgage_document.json."
+        "Provide pdf_file_path (local .pdf only, must be a PDF file). "
+        "doc_name optional (basename); 202 + Location poll; saves process_mortgage_document.json."
     ),
 )
 async def process_mortgage_document(
@@ -176,14 +133,10 @@ async def process_mortgage_document(
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = False
 
     if not has_path:
         return ToolResult(
-            content=(
-                "Provide exactly one of pdf_file_path (local PDF file) or "
-                "doc_content (PDF base64, blob id, or URL per your integration)."
-            )
+            content="Provide pdf_file_path (local PDF file)."
         )
 
     pdf4me_api_key = config.api_key
@@ -192,38 +145,27 @@ async def process_mortgage_document(
             content="Authentication failed: no API key provided in the request."
         )
 
-    if has_path:
-        path = str(pdf_file_path).strip()
-        try:
-            encoded, ext = file_to_base64(path)
-        except OSError as exc:
-            return ToolResult(content=f"Could not read file: {exc}")
-        ext_lower = ext.lower()
-        if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
-            return ToolResult(
-                content=(
-                    f"This tool expects a PDF file; got extension '{ext}'. "
-                    f"Use a path ending in {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
-                )
+    path = str(pdf_file_path).strip()
+    try:
+        encoded, ext = file_to_base64(path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read file: {exc}")
+    ext_lower = ext.lower()
+    if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
+        return ToolResult(
+            content=(
+                f"This tool expects a PDF file; got extension '{ext}'. "
+                f"Use a path ending in {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
             )
-        if not _file_starts_with_pdf_magic(path):
-            return ToolResult(
-                content="Local file does not look like a PDF (missing %PDF- header)."
-            )
-        content_for_api = encoded
-        resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(
-            path)
-    else:
-        raw_content = str(doc_content).strip()
-        after_url = _strip_data_url_prefix(raw_content)
-        prefix_err = _mortgage_doc_content_pdf_prefix_error(after_url)
-        if prefix_err:
-            return ToolResult(content=prefix_err)
-        content_for_api = after_url.strip()
-        resolved_doc_name = (doc_name or "").strip() or _DEFAULT_DOC_NAME
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(
-            resolved_doc_name)
+        )
+    if not _file_starts_with_pdf_magic(path):
+        return ToolResult(
+            content="Local file does not look like a PDF (missing %PDF- header)."
+        )
+    content_for_api = encoded
+    resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
+    resolved_out = output_dir if output_dir else _default_output_dir_for_file(
+        path)
 
     _suffixes = tuple(_ALLOWED_INPUT_EXTENSIONS)
     if not resolved_doc_name.lower().endswith(_suffixes):

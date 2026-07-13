@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -17,17 +16,6 @@ _ASYNC_POLL_MAX_ATTEMPTS = 25
 _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 _ALLOWED_INPUT_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg"})
-_DEFAULT_DOC_NAME = "credit_card.png"
-
-
-def _strip_data_url_prefix(content: str) -> str:
-    """If doc_content is a data URL, return only the part after the first comma."""
-    s = content.strip()
-    if s.lower().startswith("data:") and "," in s:
-        return s.split(",", 1)[1].strip()
-    return s
-
-
 def _strip_utf8_bom_and_leading_ws(data: bytes) -> bytes:
     if data.startswith(b"\xef\xbb\xbf"):
         data = data[3:]
@@ -65,19 +53,9 @@ def _effective_card_dict(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "credit_card"
-    slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "credit_card"
-
-
 def _default_output_dir_for_file(card_file_path: str) -> str:
     p = Path(card_file_path).resolve()
     return str(p.parent / f"process_credit_card_{p.stem}")
-
-
-def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_credit_card_{_slug_from_doc_name(doc_name)}")
 
 
 async def _poll_process_credit_card_job(
@@ -139,11 +117,8 @@ async def _call_process_credit_card_api(
         "AI-Process Credit Card: extract structured data from a credit card image/PDF via PDF4me "
         "POST /api/v2/ProcessCreditCard. Body uses IsAsync (must be true) and CustomFieldKeys (PascalCase) "
         "only when custom_field_keys is non-empty—omit CustomFieldKeys when unused. "
-        "Provide exactly one of: pdf_file_path (local .pdf/.png/.jpg/.jpeg as Base64) "
-        "or doc_content (Base64 without requiring a PDF prefix—PNG/JPEG etc., blob id, or URL). "
-        "If doc_content is a data URL (data:...;base64,...), the prefix before the first comma is stripped. "
-        "doc_name optional with file path (defaults to basename); with doc_content alone defaults to "
-        f"{_DEFAULT_DOC_NAME!r}; names without an extension get .png (not .pdf). "
+        "Provide pdf_file_path (local .pdf/.png/.jpg/.jpeg as Base64). "
+        "doc_name optional (defaults to basename); names without an extension get .png (not .pdf). "
         "202 + Location poll; saves process_credit_card.json."
     ),
 )
@@ -154,14 +129,10 @@ async def process_credit_card(
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = False
 
     if not has_path:
         return ToolResult(
-            content=(
-                "Provide exactly one of pdf_file_path (local card image/PDF) or "
-                "doc_content (Base64, data URL, blob id, or URL per your integration)."
-            )
+            content="Provide pdf_file_path (local card image/PDF)."
         )
 
     pdf4me_api_key = config.api_key
@@ -170,30 +141,23 @@ async def process_credit_card(
             content="Authentication failed: no API key provided in the request."
         )
 
-    if has_path:
-        path = str(pdf_file_path).strip()
-        try:
-            encoded, ext = file_to_base64(path)
-        except OSError as exc:
-            return ToolResult(content=f"Could not read file: {exc}")
-        ext_lower = ext.lower()
-        if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
-            return ToolResult(
-                content=(
-                    f"Unsupported file type '{ext}'. "
-                    f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
-                )
+    path = str(pdf_file_path).strip()
+    try:
+        encoded, ext = file_to_base64(path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read file: {exc}")
+    ext_lower = ext.lower()
+    if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
+        return ToolResult(
+            content=(
+                f"Unsupported file type '{ext}'. "
+                f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
             )
-        content_for_api = encoded
-        resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(
-            path)
-    else:
-        raw_content = str(doc_content).strip()
-        content_for_api = _strip_data_url_prefix(raw_content)
-        resolved_doc_name = (doc_name or "").strip() or _DEFAULT_DOC_NAME
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(
-            resolved_doc_name)
+        )
+    content_for_api = encoded
+    resolved_doc_name = (doc_name or "").strip() or os.path.basename(path)
+    resolved_out = output_dir if output_dir else _default_output_dir_for_file(
+        path)
 
     _suffixes = tuple(_ALLOWED_INPUT_EXTENSIONS)
     if not resolved_doc_name.lower().endswith(_suffixes):

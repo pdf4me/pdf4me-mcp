@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -18,14 +17,6 @@ _ASYNC_POLL_INTERVAL_SEC = 2.0
 
 _ALLOWED_INPUT_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg"})
 _DEFAULT_DOC_NAME = "tax_document.pdf"
-
-
-def _strip_data_url_prefix(content: str) -> str:
-    """If doc_content is a data URL, return only the part after the first comma."""
-    s = content.strip()
-    if s.lower().startswith("data:") and "," in s:
-        return s.split(",", 1)[1].strip()
-    return s
 
 
 def _sanitize_profiles(profiles: Optional[str]) -> Optional[str]:
@@ -98,19 +89,9 @@ def _effective_tax_dict(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _slug_from_doc_name(doc_name: str) -> str:
-    stem = Path(doc_name).stem or "tax_document"
-    slug = re.sub(r"[^\w\-]+", "_", stem, flags=re.UNICODE).strip("_")
-    return slug or "tax_document"
-
-
 def _default_output_dir_for_file(file_path: str) -> str:
     p = Path(file_path).resolve()
     return str(p.parent / f"process_tax_document_{p.stem}")
-
-
-def _default_output_dir_for_doc_name(doc_name: str) -> str:
-    return str(Path.cwd() / f"process_tax_document_{_slug_from_doc_name(doc_name)}")
 
 
 async def _poll_process_tax_document_job(
@@ -174,9 +155,9 @@ async def _call_process_tax_document_api(
         f"{_DEFAULT_DOC_NAME!r} if omitted; never replaced by local file basename or URL path in the request), "
         "docContent, isAsync (true); optional taxModel (omit when empty or 'none'); "
         "customFieldKeys camelCase when keys present (list and/or custom_field_keys_csv merged); optional profiles (sanitized). "
-        "Exactly one of pdf_file_path or doc_content (PDF base64, blob id, or URL). "
+        "Provide pdf_file_path (local .pdf/.png/.jpg/.jpeg). "
         "tax_model examples: W2, 1099, 1099-SSA, 1040, 1040-SR, 1040-NR, 1098, 1098-E, 1098-T, 1095A, 1095C, W-4, UnifiedTaxUS. "
-        "Data URL doc_content: strip prefix before first comma. 202 + Location poll; saves process_tax_document.json."
+        "202 + Location poll; saves process_tax_document.json."
     ),
 )
 async def process_tax_document(
@@ -189,14 +170,10 @@ async def process_tax_document(
     output_dir: Optional[str] = None,
 ) -> ToolResult:
     has_path = bool(pdf_file_path and str(pdf_file_path).strip())
-    has_content = False
 
     if not has_path:
         return ToolResult(
-            content=(
-                "Provide exactly one of pdf_file_path (local tax document file) or "
-                "doc_content (Base64, data URL, blob id, or URL per your integration)."
-            )
+            content="Provide pdf_file_path (local tax document file)."
         )
 
     pdf4me_api_key = config.api_key
@@ -205,25 +182,20 @@ async def process_tax_document(
             content="Authentication failed: no API key provided in the request."
         )
 
-    path: Optional[str] = None
-    if has_path:
-        path = str(pdf_file_path).strip()
-        try:
-            encoded, ext = file_to_base64(path)
-        except OSError as exc:
-            return ToolResult(content=f"Could not read file: {exc}")
-        ext_lower = ext.lower()
-        if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
-            return ToolResult(
-                content=(
-                    f"Unsupported file type '{ext}'. "
-                    f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
-                )
+    path = str(pdf_file_path).strip()
+    try:
+        encoded, ext = file_to_base64(path)
+    except OSError as exc:
+        return ToolResult(content=f"Could not read file: {exc}")
+    ext_lower = ext.lower()
+    if ext_lower not in _ALLOWED_INPUT_EXTENSIONS:
+        return ToolResult(
+            content=(
+                f"Unsupported file type '{ext}'. "
+                f"Use one of: {', '.join(sorted(_ALLOWED_INPUT_EXTENSIONS))}."
             )
-        content_for_api = encoded
-    else:
-        raw_content = str(doc_content).strip()
-        content_for_api = _strip_data_url_prefix(raw_content)
+        )
+    content_for_api = encoded
 
     resolved_doc_name = (doc_name or "").strip() or _DEFAULT_DOC_NAME
 
@@ -232,12 +204,8 @@ async def process_tax_document(
         if "." not in resolved_doc_name.lower():
             resolved_doc_name = f"{resolved_doc_name}.pdf"
 
-    if has_path and path:
-        resolved_out = output_dir if output_dir else _default_output_dir_for_file(
-            path)
-    else:
-        resolved_out = output_dir if output_dir else _default_output_dir_for_doc_name(
-            resolved_doc_name)
+    resolved_out = output_dir if output_dir else _default_output_dir_for_file(
+        path)
 
     payload: dict[str, Any] = {
         "docName": resolved_doc_name,
