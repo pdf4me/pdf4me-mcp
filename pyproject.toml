@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pdf4me-mcp"
-version = "1.0.0"
+version = "1.0.1"
 description = "PDF4me MCP Server for PDF and document automation workflows"
 readme = "README.md"
 license = { file = "LICENSE" }
