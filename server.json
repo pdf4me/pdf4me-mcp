@@ -15,7 +15,15 @@
       "identifier": "pdf4me-mcp",
       "version": "1.0.1",
       "runtimeHint": "uvx",
-      "transport": { "type": "stdio" }
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "PDF4ME_API_KEY",
+          "description": "PDF4me API key. Sign up at https://dev.pdf4me.com to get one.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
     }
   ],
   "remotes": [
