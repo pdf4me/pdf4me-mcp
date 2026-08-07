@@ -135,7 +135,7 @@ Open Cursor Settings → MCP, or edit `~/.cursor/mcp.json` (macOS/Linux) / `%USE
       "command": "uvx",
       "args": ["pdf4me-mcp"],
       "env": {
-        "API_KEY": "your-api-key-here"
+        "PDF4ME_API_KEY": "your-api-key-here"
       }
     }
   }
@@ -157,7 +157,7 @@ Open the Claude Desktop config file:
       "command": "uvx",
       "args": ["pdf4me-mcp"],
       "env": {
-        "API_KEY": "your-api-key-here"
+        "PDF4ME_API_KEY": "your-api-key-here"
       }
     }
   }
@@ -176,7 +176,7 @@ Open `~/.config/Code/User/mcp.json` (macOS/Linux) or `%APPDATA%\Code\User\mcp.js
       "command": "uvx",
       "args": ["pdf4me-mcp"],
       "env": {
-        "API_KEY": "your-api-key-here"
+        "PDF4ME_API_KEY": "your-api-key-here"
       }
     }
   }
@@ -194,7 +194,7 @@ Edit `~/.codeium/windsurf/mcp_config.json`:
       "command": "uvx",
       "args": ["pdf4me-mcp"],
       "env": {
-        "API_KEY": "your-api-key-here"
+        "PDF4ME_API_KEY": "your-api-key-here"
       }
     }
   }
@@ -213,7 +213,7 @@ Add to your `~/.continue/config.json`:
       "command": "uvx",
       "args": ["pdf4me-mcp"],
       "env": {
-        "API_KEY": "your-api-key-here"
+        "PDF4ME_API_KEY": "your-api-key-here"
       }
     }
   ]
@@ -492,7 +492,7 @@ uvx pdf4me-mcp
 Or, if installed locally:
 
 ```bash
-API_KEY=your-api-key-here pdf4me-mcp
+PDF4ME_API_KEY=your-api-key-here pdf4me-mcp
 ```
 
 ---

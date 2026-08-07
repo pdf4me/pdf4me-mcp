@@ -3,7 +3,7 @@
   "name": "io.github.pdf4me/pdf4me-mcp",
   "title": "PDF4me",
   "description": "PDF & document automation via the PDF4me API — convert, OCR, extract, edit, secure.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "repository": {
     "url": "https://github.com/pdf4me/pdf4me-mcp",
     "source": "github"
@@ -13,9 +13,17 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "pdf4me-mcp",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "runtimeHint": "uvx",
-      "transport": { "type": "stdio" }
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "PDF4ME_API_KEY",
+          "description": "PDF4me API key. Sign up at https://dev.pdf4me.com to get one.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
     }
   ],
   "remotes": [
